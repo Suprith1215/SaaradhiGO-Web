@@ -1,4 +1,4 @@
-﻿import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
     User, Phone, Mail, Calendar, Shield, LogOut, ChevronRight,
@@ -6,7 +6,9 @@ import {
     Gift, Star, Zap, Trophy, Clock, MapPin, Download, Home,
     TrendingUp, Bell, Settings, ChevronDown, Check
 } from "lucide-react";
-import logoImage from "figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import logoImage from "@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import { getProfile } from "../../services/authService";
+import { getMyRides } from "../../services/rideService";
 
 const G = "#D4AF37";
 const DARK = "#050D1A";
@@ -14,36 +16,33 @@ const NAVY = "#0F1C2E";
 const GLASS = "rgba(255,255,255,0.04)";
 const GLASS_B = "rgba(255,255,255,0.09)";
 
-/* â”€â”€â”€ DATA â”€â”€â”€ */
-const TX = [
-    { id: 1, type: "debit", desc: "SaaraMini Ride", sub: "Koramangala â†’ Brigade Rd", amount: "â‚¹129", date: "Today 2:30 PM", icon: "ðŸš—" },
-    { id: 2, type: "credit", desc: "Money Added", sub: "Via UPI â€¢ HDFC Bank", amount: "500", date: "Today 10:00 AM", icon: "ðŸ’³" },
-    { id: 3, type: "credit", desc: "Referral Bonus", sub: "Friend joined SaaradhiGO", amount: "100", date: "Yesterday", icon: "ðŸŽ" },
-    { id: 4, type: "debit", desc: "SaaraPrime Ride", sub: "HSR â†’ Whitefield", amount: "â‚¹245", date: "Dec 19", icon: "ðŸš™" },
-    { id: 5, type: "credit", desc: "Cashback", sub: "Prime membership benefit", amount: "25", date: "Dec 18", icon: "ðŸ’°" },
-    { id: 6, type: "debit", desc: "SaaraBike Ride", sub: "Indiranagar â†’ MG Road", amount: "â‚¹49", date: "Dec 17", icon: "ðŸï¸" },
+/* ─── DATA (Fallbacks) ─── */
+const DEFAULT_TX = [
+    { id: 1, type: "debit", desc: "SaaraMini Ride", sub: "Koramangala → Brigade Rd", amount: "₹129", date: "Today 2:30 PM", icon: "🚗" },
+    { id: 2, type: "credit", desc: "Money Added", sub: "Via UPI • HDFC Bank", amount: "500", date: "Today 10:00 AM", icon: "💳" },
+    { id: 3, type: "credit", desc: "Referral Bonus", sub: "Friend joined SaaradhiGO", amount: "100", date: "Yesterday", icon: "🎁" },
+    { id: 4, type: "debit", desc: "SaaraPrime Ride", sub: "HSR → Whitefield", amount: "₹245", date: "Dec 19", icon: "🚙" },
+    { id: 5, type: "credit", desc: "Cashback", sub: "Prime membership benefit", amount: "25", date: "Dec 18", icon: "💰" },
+    { id: 6, type: "debit", desc: "SaaraBike Ride", sub: "Indiranagar → MG Road", amount: "₹49", date: "Dec 17", icon: "🏍️" },
 ];
 
-const HISTORY = [
-    { id: "R001", date: "Today, 2:30 PM", from: "Koramangala", to: "Brigade Road", fare: "â‚¹129", status: "completed", type: "SaaraMini", icon: "ðŸš—", distance: "8.8 km", rating: 5 },
-    { id: "R002", date: "Yesterday, 9:15 AM", from: "HSR Layout", to: "Whitefield", fare: "â‚¹245", status: "completed", type: "SaaraPrime", icon: "ðŸš™", distance: "14.2 km", rating: 4 },
-    { id: "R003", date: "Dec 18, 6:45 PM", from: "MG Road", to: "Airport", fare: "â‚¹520", status: "completed", type: "SaaraPrime", icon: "ðŸš™", distance: "32 km", rating: 5 },
-    { id: "R004", date: "Dec 16, 3:20 PM", from: "Indiranagar", to: "Koramangala", fare: "â‚¹89", status: "cancelled", type: "SaaraAuto", icon: "ðŸ›º", distance: "4.5 km", rating: 0 },
-    { id: "R005", date: "Dec 14, 11:00 AM", from: "BTM Layout", to: "Electronic City", fare: "â‚¹190", status: "completed", type: "SaaraMini", icon: "ðŸš—", distance: "11 km", rating: 4 },
+const DEFAULT_HISTORY = [
+    { id: "R001", date: "Today, 2:30 PM", from: "Koramangala", to: "Brigade Road", fare: "₹129", status: "completed", type: "SaaraMini", icon: "🚗", distance: "8.8 km", rating: 5 },
+    { id: "R002", date: "Yesterday, 9:15 AM", from: "HSR Layout", to: "Whitefield", fare: "₹245", status: "completed", type: "SaaraPrime", icon: "🚙", distance: "14.2 km", rating: 4 },
 ];
 
 const REWARDS = [
-    { title: "Free Ride Coupon", coins: 500, icon: "ðŸš—", value: "â‚¹100 off", available: true },
-    { title: "Priority Booking", coins: 800, icon: "âš¡", value: "Skip queue", available: true },
-    { title: "Airport Transfer Discount", coins: 1200, icon: "âœˆï¸", value: "20% off", available: false },
-    { title: "Premium Upgrade", coins: 2000, icon: "ðŸ‘‘", value: "Free upgrade", available: false },
+    { title: "Free Ride Coupon", coins: 500, icon: "🚗", value: "₹100 off", available: true },
+    { title: "Priority Booking", coins: 800, icon: "⚡", value: "Skip queue", available: true },
+    { title: "Airport Transfer Discount", coins: 1200, icon: "✈️", value: "20% off", available: false },
+    { title: "Premium Upgrade", coins: 2000, icon: "👑", value: "Free upgrade", available: false },
 ];
 
 const TIERS = [
-    { name: "Silver", icon: "ðŸ¥ˆ", color: "#A8A8A8", min: 0, max: 1000 },
-    { name: "Gold", icon: "ðŸ¥‡", color: G, min: 1000, max: 3000 },
-    { name: "Platinum", icon: "ðŸ’Ž", color: "#B9F2FF", min: 3000, max: 6000 },
-    { name: "Diamond", icon: "ðŸ’ ", color: "#9D84FF", min: 6000, max: 10000 },
+    { name: "Silver", icon: "🥈", color: "#A8A8A8", min: 0, max: 1000 },
+    { name: "Gold", icon: "🥇", color: G, min: 1000, max: 3000 },
+    { name: "Platinum", icon: "💎", color: "#B9F2FF", min: 3000, max: 6000 },
+    { name: "Diamond", icon: "💠", color: "#9D84FF", min: 6000, max: 10000 },
 ];
 
 type Tab = "overview" | "wallet" | "rewards" | "history" | "profile";
@@ -89,7 +88,35 @@ function GCard({ children, style = {}, glow, ...rest }: React.HTMLAttributes<HTM
 export function RiderDashboard() {
     const navigate = useNavigate();
     const [tab, setTab] = useState<Tab>("overview");
-    const coins = 2450;
+    const [profile, setProfile] = useState<any>(null);
+    const [rides, setRides] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [p, r] = await Promise.all([getProfile(), getMyRides()]);
+                setProfile(p);
+                setRides(r || []);
+                setLoading(false);
+            } catch (e) {
+                console.error("Failed to load dashboard data", e);
+                // Try from local storage if profile fails
+                const localUser = JSON.parse(localStorage.getItem('saaradhigo_current_user') || 'null');
+                if (localUser) setProfile(localUser);
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, []);
+
+    const logout = () => {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('saaradhigo_current_user');
+        navigate("/login");
+    };
+
+    const coins = (profile?.reward_coins) || 2450;
     const progress = ((coins - 1000) / 2000) * 100;
 
     const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
@@ -111,7 +138,7 @@ export function RiderDashboard() {
                 <div style={{ position: "absolute", width: 600, height: 600, borderRadius: "50%", background: "radial-gradient(circle, rgba(212,175,55,0.04), transparent 70%)", top: "10%", left: "-10%", filter: "blur(80px)" }} />
                 <div style={{ position: "absolute", width: 500, height: 500, borderRadius: "50%", background: "radial-gradient(circle, rgba(96,165,250,0.04), transparent 70%)", bottom: "10%", right: "-5%", filter: "blur(80px)" }} />
             </div>
-            {/* â”€â”€ NAVBAR â”€â”€ */}
+            {/* ── NAVBAR ── */}
             <nav style={{
                 position: "sticky", top: 0, zIndex: 50,
                 display: "flex", alignItems: "center", gap: 16, padding: "12px 5vw",
@@ -150,8 +177,8 @@ export function RiderDashboard() {
                         <div style={{
                             width: 28, height: 28, borderRadius: "50%", background: "rgba(212,175,55,0.2)",
                             border: `1px solid ${G}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14
-                        }}>ðŸ‘¨</div>
-                        <span style={{ color: "white", fontSize: 13, fontWeight: 600 }}>Arjun Kumar</span>
+                        }}>{profile?.gender === 'female' ? "👩" : "👨"}</div>
+                        <span style={{ color: "white", fontSize: 13, fontWeight: 600 }}>{profile?.full_name || "Arjun Kumar"}</span>
                         <ChevronDown size={14} color="rgba(255,255,255,0.4)" />
                     </div>
                     <button onClick={() => navigate("/book")} style={{
@@ -169,7 +196,7 @@ export function RiderDashboard() {
             </nav>
 
             <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 5vw", display: "flex", gap: 28, position: "relative", zIndex: 1 }}>
-                {/* â”€â”€ SIDEBAR â”€â”€ */}
+                {/* ── SIDEBAR ── */}
                 <aside style={{ width: 200, flexShrink: 0 }}>
                     <div style={{ position: "sticky", top: 82 }}>
                         {/* User card */}
@@ -178,15 +205,15 @@ export function RiderDashboard() {
                                 width: 64, height: 64, borderRadius: "50%", margin: "0 auto 10px",
                                 background: "rgba(212,175,55,0.15)", border: `2px solid ${G}`,
                                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32
-                            }}>ðŸ‘¨</div>
-                            <p style={{ fontWeight: 800, fontSize: 15, marginBottom: 2 }}>Arjun Kumar</p>
-                            <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginBottom: 10 }}>Member since Jan 2024</p>
+                            }}>{profile?.gender === 'female' ? "👩" : "👨"}</div>
+                            <p style={{ fontWeight: 800, fontSize: 15, marginBottom: 2 }}>{profile?.full_name || "Arjun Kumar"}</p>
+                            <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginBottom: 10 }}>Member since {profile?.date_joined ? new Date(profile.date_joined).getFullYear() : "2024"}</p>
                             <div style={{
                                 display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 12px",
                                 background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 999,
                                 boxShadow: "0 0 16px rgba(212,175,55,0.12)"
                             }}>
-                                <span style={{ fontSize: 14 }}>ðŸ¥‡</span>
+                                <span style={{ fontSize: 14 }}>🥇</span>
                                 <span style={{ color: G, fontSize: 11, fontWeight: 700 }}>Gold Tier</span>
                             </div>
                         </GCard>
@@ -212,7 +239,7 @@ export function RiderDashboard() {
 
                         {/* Quick stats */}
                         <GCard style={{ padding: 16, marginTop: 16 }}>
-                            {[["48", "Total Rides"], ["4.9â˜…", "Rating"], ["â‚¹4,280", "Total Spent"], ["312 km", "Distance"]].map(([v, l]) => (
+                            {[["48", "Total Rides"], ["4.9★", "Rating"], ["₹4,280", "Total Spent"], ["312 km", "Distance"]].map(([v, l]) => (
                                 <div key={l} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                                     <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{l}</span>
                                     <span style={{ color: G, fontSize: 13, fontWeight: 700 }}>{v}</span>
@@ -222,22 +249,22 @@ export function RiderDashboard() {
                     </div>
                 </aside>
 
-                {/* â”€â”€ MAIN CONTENT â”€â”€ */}
+                {/* ── MAIN CONTENT ── */}
                 <main style={{ flex: 1, minWidth: 0 }}>
 
-                    {/* â•â•â• OVERVIEW â•â•â• */}
+                    {/* ═══ OVERVIEW ═══ */}
                     {tab === "overview" && (
                         <div>
-                            <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 6 }}>Good afternoon, Arjun! ðŸ‘‹</h1>
+                            <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 6 }}>Good afternoon, {profile?.full_name?.split(' ')[0] || "Arjun"}! 👋</h1>
                             <p style={{ color: "rgba(255,255,255,0.4)", marginBottom: 24 }}>Welcome back to your SaaradhiGO dashboard.</p>
 
                             {/* Stats row */}
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 24 }}>
                                 {[
-                                    { icon: "ðŸš—", label: "Total Rides", value: "48", color: G, sub: "+3 this week" },
-                                    { icon: "ðŸ’°", label: "Wallet Balance", value: "â‚¹850", color: "#4ade80", sub: "Available", glow: "#4ade80" },
-                                    { icon: "ðŸª™", label: "Reward Coins", value: "2,450", color: "#60A5FA", sub: "Gold Member", glow: "#60A5FA" },
-                                    { icon: "â­", label: "Your Rating", value: "4.9", color: G, sub: "out of 5.0", glow: "#D4AF37" },
+                                    { icon: "🚗", label: "Total Rides", value: rides.length || "48", color: G, sub: "+3 this week" },
+                                    { icon: "💰", label: "Wallet Balance", value: `₹${profile?.wallet_balance || 850}`, color: "#4ade80", sub: "Available", glow: "#4ade80" },
+                                    { icon: "🪙", label: "Reward Coins", value: "2,450", color: "#60A5FA", sub: "Gold Member", glow: "#60A5FA" },
+                                    { icon: "⭐", label: "Your Rating", value: "4.9", color: G, sub: "out of 5.0", glow: "#D4AF37" },
                                 ].map(s => (
                                     <GCard key={s.label} style={{ padding: 20 }} glow={s.glow}>
                                         <div style={{ fontSize: 26, marginBottom: 10, filter: `drop-shadow(0 0 8px ${s.color}55)` }}>{s.icon}</div>
@@ -265,14 +292,14 @@ export function RiderDashboard() {
                                     <div>
                                         <p style={{ color: G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>QUICK BOOKING</p>
                                         <h3 style={{ fontSize: 22, fontWeight: 900, marginBottom: 6 }}>Where to next?</h3>
-                                        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Book a ride in seconds â€” Bike, Auto, Mini or Prime.</p>
+                                        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Book a ride in seconds — Bike, Auto, Mini or Prime.</p>
                                     </div>
                                     <button onClick={() => navigate("/book")} style={{
                                         padding: "12px 24px", borderRadius: 12, border: "none",
                                         background: `linear-gradient(135deg, ${G}, #F0C040)`, color: DARK,
                                         fontSize: 14, fontWeight: 800, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 8
                                     }}>
-                                        ðŸš— Book a Ride
+                                        🚗 Book a Ride
                                     </button>
                                 </div>
 
@@ -283,7 +310,7 @@ export function RiderDashboard() {
                                             <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginBottom: 4 }}>REWARD COINS</p>
                                             <p style={{ color: G, fontSize: 28, fontWeight: 900 }}>2,450</p>
                                         </div>
-                                        <span style={{ fontSize: 32 }}>ðŸ¥‡</span>
+                                        <span style={{ fontSize: 32 }}>🥇</span>
                                     </div>
                                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                                         <span style={{ padding: "4px 10px", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.3)", borderRadius: 999, color: G, fontSize: 11, fontWeight: 700 }}>Gold Member</span>
@@ -299,7 +326,7 @@ export function RiderDashboard() {
                                     <button onClick={() => setTab("rewards")} style={{
                                         marginTop: 14, width: "100%", padding: "10px", borderRadius: 10, border: `1px solid rgba(212,175,55,0.25)`,
                                         background: "rgba(212,175,55,0.06)", color: G, fontSize: 12, fontWeight: 700, cursor: "pointer"
-                                    }}>View & Redeem Rewards â†’</button>
+                                    }}>View & Redeem Rewards →</button>
                                 </GCard>
                             </div>
 
@@ -307,9 +334,9 @@ export function RiderDashboard() {
                             <GCard style={{ overflow: "hidden" }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: `1px solid ${GLASS_B}` }}>
                                     <p style={{ fontWeight: 700, fontSize: 15 }}>Recent Rides</p>
-                                    <button onClick={() => setTab("history")} style={{ color: G, fontSize: 12, background: "none", border: "none", cursor: "pointer" }}>View all â†’</button>
+                                    <button onClick={() => setTab("history")} style={{ color: G, fontSize: 12, background: "none", border: "none", cursor: "pointer" }}>View all →</button>
                                 </div>
-                                {HISTORY.slice(0, 3).map((r, i) => (
+                                {(rides.length > 0 ? rides : DEFAULT_HISTORY).slice(0, 3).map((r, i) => (
                                     <div key={r.id} style={{
                                         display: "flex", alignItems: "center", gap: 14, padding: "14px 20px",
                                         borderBottom: i < 2 ? `1px solid ${GLASS_B}` : "none"
@@ -317,7 +344,7 @@ export function RiderDashboard() {
                                         <div style={{ fontSize: 28, width: 44, height: 44, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(15,28,46,0.8)", borderRadius: 12, flexShrink: 0 }}>{r.icon}</div>
                                         <div style={{ flex: 1 }}>
                                             <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{r.type}</p>
-                                            <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{r.from} â†’ {r.to} â€¢ {r.date}</p>
+                                            <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{r.from} → {r.to} • {r.date}</p>
                                         </div>
                                         <div style={{ textAlign: "right" }}>
                                             <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{r.fare}</p>
@@ -325,7 +352,7 @@ export function RiderDashboard() {
                                                 fontSize: 10, padding: "2px 8px", borderRadius: 999,
                                                 background: r.status === "completed" ? "rgba(96,208,96,0.12)" : "rgba(232,64,64,0.1)",
                                                 color: r.status === "completed" ? "#60D080" : "#E84040"
-                                            }}>{r.status === "completed" ? "âœ“ Completed" : "âœ— Cancelled"}</span>
+                                            }}>{r.status === "completed" ? "✓ Completed" : "✗ Cancelled"}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -333,7 +360,7 @@ export function RiderDashboard() {
                         </div>
                     )}
 
-                    {/* â•â•â• WALLET â•â•â• */}
+                    {/* ═══ WALLET ═══ */}
                     {tab === "wallet" && (
                         <div>
                             <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>Wallet</h1>
@@ -349,7 +376,7 @@ export function RiderDashboard() {
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
                                     <div>
                                         <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, marginBottom: 8 }}>Available Balance</p>
-                                        <p style={{ color: G, fontSize: 48, fontWeight: 900, marginBottom: 4 }}>â‚¹850</p>
+                                        <p style={{ color: G, fontSize: 48, fontWeight: 900, marginBottom: 4 }}>₹{profile?.wallet_balance || "0"}</p>
                                         <p style={{ color: "rgba(255,255,255,0.25)", fontSize: 12 }}>Last updated: Today, 10:00 AM</p>
                                     </div>
                                     <div style={{ width: 60, height: 60, borderRadius: 18, background: "rgba(212,175,55,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -371,7 +398,7 @@ export function RiderDashboard() {
 
                             {/* Quick add */}
                             <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
-                                {["â‚¹100", "â‚¹200", "â‚¹500", "â‚¹1000"].map(amt => (
+                                {["₹100", "₹200", "₹500", "₹1000"].map(amt => (
                                     <button key={amt} style={{
                                         flex: 1, padding: "12px", borderRadius: 12, cursor: "pointer",
                                         background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.15)",
@@ -386,10 +413,10 @@ export function RiderDashboard() {
                                     <p style={{ fontWeight: 700, fontSize: 15 }}>Transaction History</p>
                                     <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 12 }}>Last 30 days</span>
                                 </div>
-                                {TX.map((tx, i) => (
+                                {DEFAULT_TX.map((tx, i) => (
                                     <div key={tx.id} style={{
                                         display: "flex", alignItems: "center", gap: 14, padding: "14px 20px",
-                                        borderBottom: i < TX.length - 1 ? `1px solid ${GLASS_B}` : "none",
+                                        borderBottom: i < DEFAULT_TX.length - 1 ? `1px solid ${GLASS_B}` : "none",
                                         transition: "background 0.2s"
                                     }}
                                         onMouseEnter={(e: any) => e.currentTarget.style.background = "rgba(212,175,55,0.03)"}
@@ -401,11 +428,11 @@ export function RiderDashboard() {
                                         }}>{tx.icon}</div>
                                         <div style={{ flex: 1 }}>
                                             <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>{tx.desc}</p>
-                                            <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{tx.sub} â€¢ {tx.date}</p>
+                                            <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{tx.sub} • {tx.date}</p>
                                         </div>
                                         <div style={{ textAlign: "right" }}>
                                             <p style={{ fontWeight: 700, fontSize: 16, color: tx.type === "credit" ? "#60D080" : "#FF8080", marginBottom: 4 }}>
-                                                {tx.type === "credit" ? "+" : "-"}â‚¹{tx.amount.replace(/[â‚¹+-]/g, "")}
+                                                {tx.type === "credit" ? "+" : "-"}₹{tx.amount.replace(/[₹+-]/g, "")}
                                             </p>
                                             {tx.type === "credit"
                                                 ? <ArrowDownLeft size={14} color="#60D080" />
@@ -418,7 +445,7 @@ export function RiderDashboard() {
                         </div>
                     )}
 
-                    {/* â•â•â• REWARDS â•â•â• */}
+                    {/* ═══ REWARDS ═══ */}
                     {tab === "rewards" && (
                         <div>
                             <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>SaaraRewards</h1>
@@ -439,11 +466,11 @@ export function RiderDashboard() {
                                             <span style={{ color: "rgba(212,175,55,0.5)", fontSize: 16, marginBottom: 10 }}>coins</span>
                                         </div>
                                         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                                            <span style={{ padding: "4px 12px", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: 999, color: G, fontSize: 12, fontWeight: 700 }}>ðŸ¥‡ Gold Member</span>
+                                            <span style={{ padding: "4px 12px", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.35)", borderRadius: 999, color: G, fontSize: 12, fontWeight: 700 }}>🥇 Gold Member</span>
                                             <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>550 coins to Platinum</span>
                                         </div>
                                     </div>
-                                    <span style={{ fontSize: 56 }}>ðŸ¥‡</span>
+                                    <span style={{ fontSize: 56 }}>🥇</span>
                                 </div>
                                 <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 999, overflow: "hidden", marginBottom: 6 }}>
                                     <div style={{ width: `${progress}%`, height: "100%", background: `linear-gradient(90deg, ${G}, #F0C040)`, borderRadius: 999 }} />
@@ -490,7 +517,7 @@ export function RiderDashboard() {
                                                 padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
                                                 background: r.available ? "rgba(212,175,55,0.1)" : GLASS,
                                                 color: r.available ? G : "rgba(255,255,255,0.3)"
-                                            }}>ðŸª™ {r.coins}</span>
+                                            }}>🪙 {r.coins}</span>
                                         </div>
                                         <p style={{ color: r.available ? "white" : "rgba(255,255,255,0.4)", fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{r.title}</p>
                                         <p style={{ color: r.available ? G : "rgba(255,255,255,0.3)", fontSize: 12, marginBottom: 14 }}>{r.value}</p>
@@ -500,7 +527,7 @@ export function RiderDashboard() {
                                             color: r.available ? DARK : "rgba(255,255,255,0.3)",
                                             cursor: r.available ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 700
                                         }}>
-                                            {r.available ? "Redeem Now" : "ðŸ”’ Locked"}
+                                            {r.available ? "Redeem Now" : "🔒 Locked"}
                                         </button>
                                     </GCard>
                                 ))}
@@ -512,7 +539,7 @@ export function RiderDashboard() {
                                 {[
                                     { action: "Completed 3 rides", coins: "+150", time: "Today", type: "earn" },
                                     { action: "Redeemed free ride coupon", coins: "-500", time: "Yesterday", type: "spend" },
-                                    { action: "Referral bonus â€” Rahul joined", coins: "+300", time: "Mon", type: "earn" },
+                                    { action: "Referral bonus — Rahul joined", coins: "+300", time: "Mon", type: "earn" },
                                     { action: "Weekend surge bonus", coins: "+200", time: "Sat", type: "earn" },
                                 ].map((a, i, arr) => (
                                     <div key={i} style={{
@@ -536,7 +563,7 @@ export function RiderDashboard() {
                         </div>
                     )}
 
-                    {/* â•â•â• RIDE HISTORY â•â•â• */}
+                    {/* ═══ RIDE HISTORY ═══ */}
                     {tab === "history" && (
                         <div>
                             <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>My Rides</h1>
@@ -544,7 +571,7 @@ export function RiderDashboard() {
 
                             {/* Summary */}
                             <div style={{ display: "flex", gap: 14, marginBottom: 24, flexWrap: "wrap" }}>
-                                {[["48", "Total Rides"], ["312 km", "Total Distance"], ["â‚¹4,280", "Total Spent"], ["4.9 â˜…", "Avg Rating"]].map(([v, l]) => (
+                                {[["48", "Total Rides"], ["312 km", "Total Distance"], ["₹4,280", "Total Spent"], ["4.9 ★", "Avg Rating"]].map(([v, l]) => (
                                     <div key={l} style={{
                                         flex: 1, minWidth: 120, padding: "18px 20px", borderRadius: 16,
                                         background: "rgba(212,175,55,0.06)", border: "1px solid rgba(212,175,55,0.12)", textAlign: "center"
@@ -556,7 +583,7 @@ export function RiderDashboard() {
                             </div>
 
                             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                                {HISTORY.map(r => (
+                                {(rides.length > 0 ? rides : DEFAULT_HISTORY).map(r => (
                                     <GCard key={r.id} style={{ overflow: "hidden", transition: "border-color 0.2s" }}
                                         onMouseEnter={(e: any) => e.currentTarget.style.borderColor = "rgba(212,175,55,0.2)"}
                                         onMouseLeave={(e: any) => e.currentTarget.style.borderColor = GLASS_B}
@@ -566,7 +593,7 @@ export function RiderDashboard() {
                                             <div style={{ width: 50, height: 50, borderRadius: 14, background: "rgba(212,175,55,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>{r.icon}</div>
                                             <div style={{ flex: 1 }}>
                                                 <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 3 }}>{r.type}</p>
-                                                <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{r.date} â€¢ {r.distance}</p>
+                                                <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{r.date} • {r.distance}</p>
                                             </div>
                                             <div style={{ textAlign: "right" }}>
                                                 <p style={{ fontWeight: 800, fontSize: 18, marginBottom: 5 }}>{r.fare}</p>
@@ -574,7 +601,7 @@ export function RiderDashboard() {
                                                     padding: "3px 10px", borderRadius: 999, fontSize: 11,
                                                     background: r.status === "completed" ? "rgba(96,208,96,0.1)" : "rgba(232,64,64,0.1)",
                                                     color: r.status === "completed" ? "#60D080" : "#E84040"
-                                                }}>{r.status === "completed" ? "âœ“ Completed" : "âœ— Cancelled"}</span>
+                                                }}>{r.status === "completed" ? "✓ Completed" : "✗ Cancelled"}</span>
                                             </div>
                                         </div>
 
@@ -616,7 +643,7 @@ export function RiderDashboard() {
                         </div>
                     )}
 
-                    {/* â•â•â• PROFILE â•â•â• */}
+                    {/* ═══ PROFILE ═══ */}
                     {tab === "profile" && (
                         <div>
                             <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>My Profile</h1>
@@ -632,17 +659,17 @@ export function RiderDashboard() {
                                                 width: 80, height: 80, borderRadius: "50%", flexShrink: 0, fontSize: 40,
                                                 background: "linear-gradient(135deg, rgba(212,175,55,0.2), rgba(212,175,55,0.05))",
                                                 border: `2px solid ${G}`, display: "flex", alignItems: "center", justifyContent: "center"
-                                            }}>ðŸ‘¨</div>
+                                            }}>{profile?.gender === 'female' ? "👩" : "👨"}</div>
                                             <div>
-                                                <p style={{ fontWeight: 800, fontSize: 20, marginBottom: 3 }}>Arjun Kumar</p>
-                                                <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, marginBottom: 10 }}>Member since Jan 2024</p>
+                                                <p style={{ fontWeight: 800, fontSize: 20, marginBottom: 3 }}>{profile?.full_name || "Arjun Kumar"}</p>
+                                                <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, marginBottom: 10 }}>Member since {profile?.date_joined ? new Date(profile.date_joined).getFullYear() : "2024"}</p>
                                                 <button style={{ padding: "7px 16px", borderRadius: 10, border: "none", background: `linear-gradient(135deg, ${G}, #F0C040)`, color: DARK, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                                                     Edit Profile
                                                 </button>
                                             </div>
                                         </div>
                                         <div style={{ display: "flex", gap: 20, paddingTop: 16, borderTop: `1px solid ${GLASS_B}` }}>
-                                            {[["48", "Rides"], ["4.9â˜…", "Rating"], ["Gold", "Tier"]].map(([v, l]) => (
+                                            {[["48", "Rides"], ["4.9★", "Rating"], ["Gold", "Tier"]].map(([v, l]) => (
                                                 <div key={l} style={{ textAlign: "center", flex: 1 }}>
                                                     <p style={{ color: G, fontWeight: 700, fontSize: 18, marginBottom: 2 }}>{v}</p>
                                                     <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>{l}</p>
@@ -658,11 +685,11 @@ export function RiderDashboard() {
                                             <button style={{ color: G, fontSize: 12, background: "none", border: "none", cursor: "pointer" }}>Edit</button>
                                         </div>
                                         {[
-                                            { Icon: User, label: "Full Name", value: "Arjun Kumar" },
-                                            { Icon: Phone, label: "Phone Number", value: "+91 98765 43210" },
-                                            { Icon: Mail, label: "Email", value: "arjun.kumar@gmail.com" },
-                                            { Icon: Calendar, label: "Date of Birth", value: "15 Aug 1995" },
-                                            { Icon: User, label: "Gender", value: "Male" },
+                                            { Icon: User, label: "Full Name", value: profile?.full_name || "Not Set" },
+                                            { Icon: Phone, label: "Phone Number", value: profile?.phone_number || "Not Set" },
+                                            { Icon: Mail, label: "Email", value: profile?.email || "Not Set" },
+                                            { Icon: Calendar, label: "Date of Birth", value: profile?.dob || "Not Set" },
+                                            { Icon: User, label: "Gender", value: profile?.gender || "Not Set" },
                                         ].map(({ Icon, label, value }, i, arr) => (
                                             <div key={label} style={{
                                                 display: "flex", alignItems: "center", gap: 14, padding: "13px 20px",
@@ -700,10 +727,10 @@ export function RiderDashboard() {
                                                 display: "flex", alignItems: "center", gap: 14, padding: "13px 20px",
                                                 borderBottom: i === 0 ? `1px solid ${GLASS_B}` : "none"
                                             }}>
-                                                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(212,175,55,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>ðŸ‘¤</div>
+                                                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(212,175,55,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>👤</div>
                                                 <div style={{ flex: 1 }}>
                                                     <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 2 }}>{c.name}</p>
-                                                    <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{c.relation} â€¢ {c.phone}</p>
+                                                    <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>{c.relation} • {c.phone}</p>
                                                 </div>
                                                 <ChevronRight size={16} color="rgba(255,255,255,0.2)" />
                                             </div>
@@ -736,7 +763,7 @@ export function RiderDashboard() {
                                     </GCard>
 
                                     {/* Logout */}
-                                    <button style={{
+                                    <button onClick={logout} style={{
                                         width: "100%", padding: "14px", borderRadius: 14, cursor: "pointer",
                                         background: "rgba(220,50,50,0.06)", border: "1px solid rgba(220,50,50,0.2)",
                                         color: "#E84040", fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", gap: 8

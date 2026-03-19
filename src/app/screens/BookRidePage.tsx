@@ -7,7 +7,8 @@ import {
     MessageCircle, Send, PhoneCall, KeyRound, Car
 } from "lucide-react";
 import { MapBackground } from "../components/MapBackground";
-import logoImage from "figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import { useRideSimulation } from "../../services/mockRealtime";
+import logoImage from "@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
 
 const G = "#D4AF37";
 const DARK = "#050D1A";
@@ -44,6 +45,7 @@ type Gender = "male" | "female" | "other" | "";
 
 export function BookRidePage() {
     const navigate = useNavigate();
+    const { session, requestRide, cancelRide } = useRideSimulation();
     const [step, setStep] = useState<Step>("location");
     const [pickup, setPickup] = useState("Koramangala, Bengaluru");
     const [drop, setDrop] = useState("");
@@ -55,6 +57,7 @@ export function BookRidePage() {
     const [guardianName, setGuardianName] = useState("");
     const [guardianPhone, setGuardianPhone] = useState("");
     const [shareTrip, setShareTrip] = useState(false);
+    const [routeInfo, setRouteInfo] = useState<{ distance: string; duration: string; alternateRoutes: number } | null>(null);
     const dropRef = useRef<HTMLInputElement>(null);
 
     const ride = rides.find(r => r.id === selectedRide)!;
@@ -75,14 +78,23 @@ export function BookRidePage() {
         setGuardianName("");
         setGuardianPhone("");
         setShareTrip(false);
+        cancelRide();
     };
 
     useEffect(() => {
         if (step === "location") setTimeout(() => dropRef.current?.focus(), 100);
     }, [step]);
 
+    // Wait for the mock driver to accept the ride instead of auto-skipping
+    useEffect(() => {
+        if (session?.status === "accepted" && step === "confirm") {
+            setStep("booked");
+            setConfirmed(false); // Reset visual button state
+        }
+    }, [session?.status, step]);
+
     /* ── Booking success ── */
-    if (step === "booked") return <BookedScreen navigate={navigate} ride={ride} guardianName={guardianName} shareTrip={shareTrip} onBookAnother={resetAndBookAnother} />;
+    if (step === "booked") return <BookedScreen navigate={navigate} session={session} ride={ride} guardianName={guardianName} shareTrip={shareTrip} onBookAnother={resetAndBookAnother} />;
 
     return (
         <div style={{
@@ -347,24 +359,43 @@ export function BookRidePage() {
 
                         {/* ─── Right: Live Map ─── */}
                         <div style={{ borderRadius: 24, overflow: "hidden", height: 640, position: "sticky", top: 90, boxShadow: "0 20px 60px rgba(0,0,0,0.6)" }}>
-                            <MapBackground height="100%" showDriverPin showRoute={!!drop} showDestPin={!!drop} />
+                            <MapBackground 
+                                height="100%" 
+                                showRoute={!!drop} 
+                                pickup={pickup} 
+                                drop={drop}
+                                showDestPin={!!drop}
+                                onRouteInfo={setRouteInfo}
+                            />
 
                             {/* Top overlay — your location */}
                             <div style={{
                                 position: "absolute", top: 14, left: 14, right: 14,
                                 background: "rgba(5,13,26,0.88)", backdropFilter: "blur(16px)",
                                 border: `1px solid rgba(212,175,55,0.25)`, borderRadius: 16,
-                                padding: "12px 16px", display: "flex", alignItems: "center", gap: 12
+                                padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
+                                zIndex: 10
                             }}>
                                 <div style={{ width: 10, height: 10, borderRadius: "50%", background: G, boxShadow: `0 0 0 4px rgba(212,175,55,0.25)` }} />
                                 <div style={{ flex: 1 }}>
                                     <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>Your Location</p>
                                     <p style={{ color: "white", fontSize: 13, fontWeight: 700 }}>📍 {pickup || "Set pickup..."}</p>
                                 </div>
-                                <div style={{
-                                    background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)",
-                                    borderRadius: 8, padding: "4px 10px", fontSize: 11, color: G, fontWeight: 700
-                                }}>LIVE</div>
+                                {routeInfo && (
+                                    <div style={{
+                                        background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
+                                        borderRadius: 10, padding: "6px 12px", textAlign: "right"
+                                    }}>
+                                        <p style={{ color: G, fontSize: 14, fontWeight: 900, lineHeight: 1 }}>{routeInfo.distance}</p>
+                                        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 10, marginTop: 2 }}>{routeInfo.duration} ETA</p>
+                                    </div>
+                                )}
+                                {!routeInfo && (
+                                    <div style={{
+                                        background: "rgba(212,175,55,0.1)", border: "1px solid rgba(212,175,55,0.3)",
+                                        borderRadius: 8, padding: "4px 10px", fontSize: 11, color: G, fontWeight: 700
+                                    }}>LIVE</div>
+                                )}
                             </div>
 
                             {/* Bottom overlay — destination or vehicle count */}
@@ -766,21 +797,53 @@ export function BookRidePage() {
                             )}
 
                             <button
-                                onClick={() => { if (canBook) { setConfirmed(true); setTimeout(() => setStep("booked"), 1200); } }}
+                                onClick={() => { 
+                                    if (canBook && session?.status !== "searching") { 
+                                        setConfirmed(true); 
+                                        let rName = "Anonymous", rAge = "", rGender = "";
+                                        try {
+                                            const p = JSON.parse(localStorage.getItem('saaradhigo_current_user') || 'null');
+                                            if (p) {
+                                                rName = p.full_name || p.name || "Anonymous";
+                                                rAge = p.age || "";
+                                                rGender = p.gender || "";
+                                            }
+                                        } catch(e) {}
+                                        requestRide({ 
+                                            pickup, drop, fare: ride.price, distance: "8.8 km", eta: ride.eta, type: ride.name,
+                                            riderName: rName, riderAge: rAge, riderGender: rGender
+                                        });
+                                    } else if (session?.status === "searching") {
+                                        cancelRide();
+                                        setConfirmed(false);
+                                    }
+                                }}
                                 style={{
                                     width: "100%", padding: "18px", borderRadius: 18, border: "none",
                                     cursor: canBook ? "pointer" : "not-allowed",
-                                    background: confirmed
-                                        ? "rgba(96,208,96,0.15)"
+                                    background: session?.status === "searching"
+                                        ? "rgba(255,165,0,0.15)"
                                         : canBook
                                             ? `linear-gradient(135deg, ${G}, #F0C040)`
                                             : "rgba(255,255,255,0.07)",
-                                    color: confirmed ? "#60D080" : canBook ? DARK : "rgba(255,255,255,0.3)",
+                                    color: session?.status === "searching" ? "#FFA500" : canBook ? DARK : "rgba(255,255,255,0.3)",
                                     fontSize: 17, fontWeight: 800, transition: "all 0.3s",
                                     display: "flex", alignItems: "center", justifyContent: "center", gap: 10
                                 }}
                             >
-                                {confirmed ? <><CheckCircle size={20} /> Booking confirmed...</> : <>✅ Confirm & Book Ride</>}
+                                {session?.status === "searching" ? (
+                                    <>
+                                        <div style={{
+                                            width: 16, height: 16, border: "2px solid #FFA500", 
+                                            borderTopColor: "transparent", borderRadius: "50%", 
+                                            animation: "spin 1s linear infinite"
+                                        }} />
+                                        Finding your ride (Cancel)
+                                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                                    </>
+                                ) : (
+                                    <>✅ Confirm & Book Ride</>
+                                )}
                             </button>
                         </div>
 
@@ -836,26 +899,48 @@ export function BookRidePage() {
 /* ──────────────────────────────────────────────────────────
    Booked Screen — with Live Tracking, PIN Verify & Chat
 ────────────────────────────────────────────────────────── */
-const TRACKING_STEPS = [
-    { id: "assigned", icon: "✅", label: "Driver Assigned", sub: "Ramesh K. is heading your way", color: "#60D080" },
-    { id: "enroute", icon: "🏍️", label: "Driver En Route", sub: "2 min away · KA 05 MC 4892", color: G },
-    { id: "arrived", icon: "📍", label: "Driver Arrived", sub: "Verify PIN before boarding", color: "#60A5FA" },
-    { id: "started", icon: "🚀", label: "Trip in Progress", sub: "You're on your way!", color: "#A78BFA" },
-];
-
-const CHAT_MESSAGES_INIT = [
-    { from: "driver", text: "Hello! I am Ramesh, your driver. I have arrived near the pickup point.", time: "Now" },
-];
+// Helper to get matched driver
+const getMatchedDriver = () => {
+    try {
+        const approved = JSON.parse(localStorage.getItem("saaradhigo_approved_drivers") || "[]");
+        if (approved && approved.length > 0) {
+            const latest = approved[approved.length - 1];
+            return {
+                name: latest.name || "Pavan",
+                vehicle: latest.plate || "KA 05 MC 4892",
+                phone: latest.phone_number || "+91 98765 43210"
+            };
+        }
+    } catch (e) {
+        console.error("Error reading approved drivers", e);
+    }
+    return { name: "Pavan", vehicle: "KA 05 MC 4892", phone: "+91 98765 43210" };
+};
 
 function BookedScreen({
-    navigate, ride, guardianName, shareTrip, onBookAnother
+    navigate, session, ride, guardianName, shareTrip, onBookAnother
 }: {
     navigate: ReturnType<typeof useNavigate>;
+    session: any;
     ride: typeof rides[0];
     guardianName: string;
     shareTrip: boolean;
     onBookAnother: () => void;
 }) {
+    // Dynamic driver
+    const driver = getMatchedDriver();
+
+    const TRACKING_STEPS = [
+        { id: "assigned", icon: "✅", label: "Driver Assigned", sub: `${driver.name} is heading your way`, color: "#60D080" },
+        { id: "enroute", icon: "🏍️", label: "Driver En Route", sub: `2 min away · ${driver.vehicle}`, color: G },
+        { id: "arrived", icon: "📍", label: "Driver Arrived", sub: "Verify PIN before boarding", color: "#60A5FA" },
+        { id: "started", icon: "🚀", label: "Trip in Progress", sub: "You're on your way!", color: "#A78BFA" },
+    ];
+
+    const CHAT_MESSAGES_INIT = [
+        { from: "driver", text: `Hello! I am ${driver.name.split(' ')[0]}, your driver. I have arrived near the pickup point.`, time: "Now" },
+    ];
+
     // Tracking
     const [trackStep, setTrackStep] = useState(0);       // 0=assigned,1=enroute,2=arrived,3=started
     const [pinVerified, setPinVerified] = useState(false);
@@ -872,13 +957,14 @@ function BookedScreen({
     // Location share
     const [locationShared, setLocationShared] = useState(false);
 
-    // Auto-advance tracking steps (simulated)
+    // Sync tracking steps with session status
     useEffect(() => {
-        if (trackStep >= TRACKING_STEPS.length - 1) return;
-        const delays = [3000, 5000, 8000]; // ms between steps
-        const t = setTimeout(() => setTrackStep(s => s + 1), delays[trackStep] ?? 4000);
-        return () => clearTimeout(t);
-    }, [trackStep]);
+        if (!session) return;
+        if (session.status === "searching" || session.status === "accepted") setTrackStep(0); // assigned
+        else if (session.status === "arrived") setTrackStep(2);
+        else if (session.status === "riding") setTrackStep(3);
+        // 'ended' is handled gracefully below
+    }, [session?.status]);
 
     // Auto-scroll chat
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, chatOpen]);
@@ -908,6 +994,34 @@ function BookedScreen({
     const isArrived = trackStep === 2 && !pinVerified && trackStep < 3;
     const isTripStarted = trackStep === 3;
 
+    if (session?.status === "ended") {
+        return (
+            <div style={{
+                minHeight: "100vh",
+                background: `linear-gradient(180deg, ${DARK} 0%, ${NAVY} 100%)`,
+                fontFamily: "'Inter',sans-serif", color: "white",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                padding: 20, textAlign: "center"
+            }}>
+                <div style={{ fontSize: 64, marginBottom: 20 }}>🎉</div>
+                <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8, color: "#60D080" }}>Ride Completed!</h1>
+                <p style={{ color: "rgba(255,255,255,0.6)", marginBottom: 32 }}>You have reached your destination securely.</p>
+                
+                <div style={{ background: "rgba(255,255,255,0.05)", padding: 24, borderRadius: 20, width: "100%", maxWidth: 400, border: `1px solid ${GLASS_B}` }}>
+                    <p style={{ fontWeight: 700, marginBottom: 16 }}>How was your ride with {driver.name}?</p>
+                    <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 24 }}>
+                        {[1, 2, 3, 4, 5].map(i => <Star key={i} size={32} color={G} cursor="pointer" />)}
+                    </div>
+                    <button onClick={onBookAnother} style={{
+                        width: "100%", padding: "14px", borderRadius: 14, border: "none",
+                        background: `linear-gradient(135deg, ${G}, #F0C040)`,
+                        color: DARK, cursor: "pointer", fontSize: 16, fontWeight: 800
+                    }}>Submit & Book Another</button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div style={{
             minHeight: "100vh",
@@ -935,7 +1049,7 @@ function BookedScreen({
                 </div>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 10 }}>
                     {/* Call driver */}
-                    <a href="tel:+919876543210"
+                    <a href={`tel:${driver.phone}`}
                         style={{
                             width: 40, height: 40, borderRadius: 12,
                             background: "rgba(96,208,96,0.12)", border: "1px solid rgba(96,208,96,0.35)",
@@ -984,7 +1098,9 @@ function BookedScreen({
                             </div>
                             <div style={{ flex: 1 }}>
                                 <p style={{ color: "white", fontSize: 18, fontWeight: 900, marginBottom: 2 }}>Ride Booked! 🎉</p>
-                                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Your {ride.name} is confirmed</p>
+                                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>
+                                    Your {ride.name} is confirmed with {session?.driverName || driver.name}
+                                </p>
                             </div>
                             <div style={{ textAlign: "right", flexShrink: 0 }}>
                                 <p style={{ color: G, fontSize: 24, fontWeight: 900 }}>{ride.price}</p>
@@ -1172,8 +1288,8 @@ function BookedScreen({
                                     fontSize: 24, flexShrink: 0
                                 }}>👨</div>
                                 <div style={{ flex: 1 }}>
-                                    <p style={{ fontWeight: 800, fontSize: 16 }}>Ramesh K.</p>
-                                    <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>KA 05 MC 4892</p>
+                                    <p style={{ fontWeight: 800, fontSize: 16 }}>{session?.driverName || driver.name}</p>
+                                    <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{session?.vehicle || driver.vehicle}</p>
                                     <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
                                         {[1, 2, 3, 4, 5].map(i => <Star key={i} size={12} color={G} fill={G} />)}
                                         <span style={{ color: G, fontSize: 12, fontWeight: 700, marginLeft: 4 }}>4.9</span>
@@ -1342,10 +1458,10 @@ function BookedScreen({
                                 display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0
                             }}>👨</div>
                             <div style={{ flex: 1 }}>
-                                <p style={{ fontWeight: 800, fontSize: 15 }}>Ramesh K.</p>
+                                <p style={{ fontWeight: 800, fontSize: 15 }}>{driver.name}</p>
                                 <p style={{ color: "#60D080", fontSize: 12 }}>● Online · Driver</p>
                             </div>
-                            <a href="tel:+919876543210" style={{
+                            <a href={`tel:${driver.phone}`} style={{
                                 width: 40, height: 40, borderRadius: 12,
                                 background: "rgba(96,208,96,0.12)", border: "1px solid rgba(96,208,96,0.35)",
                                 display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none",

@@ -14,7 +14,8 @@ import {
     History,
     ArrowRight,
 } from "lucide-react";
-import logoImage from "figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import { requestOTP, verifyOTP, updateUserInfo } from "../../services/authService";
+import logoImage from "@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
 
 // Onboarding Images
 import rideBookingImg from "../../assets/onboarding/ride_booking.png";
@@ -41,7 +42,7 @@ const glassBtnStyle = (active: boolean): React.CSSProperties => ({
     cursor: active ? "pointer" : "not-allowed", transition: "all 0.3s ease"
 });
 
-type Screen = "email_login" | "intro" | "role" | "onboarding" | "login" | "otp" | "permissions";
+type Screen = "email_login" | "intro" | "role" | "onboarding" | "login" | "otp" | "permissions" | "profile";
 type AuthProvider = "phone" | "google" | "apple";
 
 const SLIDES = [
@@ -89,6 +90,14 @@ export function CustomerAuthPage() {
     const [authProvider, setAuthProvider] = useState<AuthProvider>("phone");
     const [otp, setOtp] = useState(["", "", "", "", "", ""]);
     const [permsGranted, setPermsGranted] = useState<Record<string, boolean>>({});
+    const [userRole, setUserRole] = useState<'rider' | 'driver'>("rider");
+    const [passengerName, setPassengerName] = useState("");
+    const [passengerAge, setPassengerAge] = useState("");
+    const [passengerGender, setPassengerGender] = useState("");
+
+    const passengers = JSON.parse(localStorage.getItem('saaradhigo_passengers') || '[]');
+    const phoneWithCode = `+91${phone}`;
+    const existingPassenger = phone.length === 10 ? passengers.find((p: any) => p.phone_number === phoneWithCode || p.phone_number === phone || p.phone === phone) : null;
 
     const go = (s: Screen) => setScreen(s);
     const handleLetsGo = () => {
@@ -168,7 +177,7 @@ export function CustomerAuthPage() {
                                 marginBottom: 8,
                             }}
                         >
-                            Welcome Back
+                            {existingPassenger ? `Welcome back, ${existingPassenger.full_name || existingPassenger.name || "Rider"}!` : "Get Started"}
                         </h1>
                         <p
                             style={{
@@ -177,7 +186,9 @@ export function CustomerAuthPage() {
                                 fontSize: 16,
                             }}
                         >
-                            Sign in to access your premium ride experience
+                            {existingPassenger 
+                                ? "Sign in to access your premium ride experience" 
+                                : "Enter your phone number to book faster and safer rides."}
                         </p>
                     </div>
 
@@ -252,7 +263,46 @@ export function CustomerAuthPage() {
 
                         <div className="w-full mb-6 relative z-10">
                             <button
-                                onClick={() => { if (phone.length === 10) { setAuthProvider("phone"); go("otp"); } }}
+                                onClick={async () => { 
+                                    if (phone.length === 10) { 
+                                        try {
+                                            console.log(`[AUTH] Requesting OTP for ${phone} as ${userRole}`);
+                                            const response = await requestOTP(`+91${phone}`, userRole);
+                                            console.log("[AUTH] OTP Response:", response);
+                                            
+                                            // Handle various possible response formats
+                                            const otpValue = response?.otp || response?.data?.otp;
+                                            if (otpValue) {
+                                                console.log(`\n=============================\n[TEST] OTP RECEIVED: ${otpValue}\n=============================\n`);
+                                                
+                                                // Send OTP to the local Vite terminal for easy copy-paste
+                                                try {
+                                                    await fetch('/__log_otp', {
+                                                        method: 'POST',
+                                                        body: JSON.stringify({ otp: otpValue })
+                                                    });
+                                                } catch(err) {}
+
+                                                const otpArray = String(otpValue).split("").slice(0, 6);
+                                                while(otpArray.length < 6) otpArray.push("");
+                                                setOtp(otpArray);
+                                            } else {
+                                                console.log("OTP requested! If not shown here, it was sent via SMS.");
+                                            }
+
+                                            setAuthProvider("phone"); 
+                                            go("otp"); 
+                                        } catch (e: any) {
+                                            console.error("[AUTH] OTP Request Failed:", e.response?.data || e.message);
+                                            console.warn("Falling back to demo mode due to backend error.");
+                                            alert(`Backend Error: ${e.response?.data?.message || e.message}\nEntering Demo Mode...`);
+                                            
+                                            setOtp("123456".split(""));
+                                            setAuthProvider("phone"); 
+                                            go("otp"); 
+                                        }
+                                    } 
+                                }}
                                 disabled={phone.length !== 10}
                                 style={glassBtnStyle(phone.length === 10)}
                             >
@@ -411,6 +461,115 @@ export function CustomerAuthPage() {
         );
 
     /* ══════════════════════════════════════
+         ROLE SELECTION
+       ══════════════════════════════════════ */
+    if (screen === "role")
+        return (
+            <div
+                style={{
+                    ...WRAP,
+                    background:
+                        "radial-gradient(circle at 50% 50%, #0a1a35 0%, #050D1A 100%)",
+                }}
+            >
+                <div
+                    style={{
+                        position: "absolute",
+                        width: "100%",
+                        height: "100%",
+                        opacity: 0.1,
+                        backgroundImage:
+                            "radial-gradient(rgba(212,175,55,0.2) 1px, transparent 1px)",
+                        backgroundSize: "40px 40px",
+                        pointerEvents: "none",
+                    }}
+                />
+                <div
+                    style={{
+                        width: "100%",
+                        maxWidth: 480,
+                        zIndex: 1,
+                        animation: "sfi 0.8s ease",
+                    }}
+                >
+                    <div style={{ textAlign: "center", marginBottom: 40 }}>
+                        <h1
+                            style={{
+                                fontFamily: "'Poppins', sans-serif",
+                                fontSize: 32,
+                                fontWeight: 900,
+                                marginBottom: 12,
+                            }}
+                        >
+                            Choose Your Path
+                        </h1>
+                        <p
+                            style={{
+                                fontFamily: "'Inter', sans-serif",
+                                color: "rgba(255,255,255,0.45)",
+                                fontSize: 16,
+                            }}
+                        >
+                            Select how you'd like to experience SaaradhiGO
+                        </p>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                        <div
+                            onClick={() => { setUserRole("rider"); go("login"); }}
+                            className="glass-card"
+                            style={{
+                                padding: "24px",
+                                borderRadius: 24,
+                                border: `2px solid ${userRole === "rider" ? G : "rgba(255,255,255,0.08)"}`,
+                                background: userRole === "rider" ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.02)",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 20,
+                                transition: "all 0.3s ease",
+                            }}
+                        >
+                            <div style={{ width: 64, height: 64, borderRadius: 16, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                                🚗
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>I'm a Rider</h3>
+                                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>Premium rides at your fingertips</p>
+                            </div>
+                            {userRole === "rider" && <Check size={24} color={G} />}
+                        </div>
+
+                        <div
+                            onClick={() => { setUserRole("driver"); go("login"); }}
+                            className="glass-card"
+                            style={{
+                                padding: "24px",
+                                borderRadius: 24,
+                                border: `2px solid ${userRole === "driver" ? G : "rgba(255,255,255,0.08)"}`,
+                                background: userRole === "driver" ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.02)",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 20,
+                                transition: "all 0.3s ease",
+                            }}
+                        >
+                            <div style={{ width: 64, height: 64, borderRadius: 16, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                                👨‍✈️
+                            </div>
+                            <div style={{ flex: 1 }}>
+                                <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>I'm a Driver</h3>
+                                <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>Drive and earn on your schedule</p>
+                            </div>
+                            {userRole === "driver" && <Check size={24} color={G} />}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+    /* ══════════════════════════════════════
          4.5 EMAIL LOGIN
        ══════════════════════════════════════ */
     if (screen === "email_login")
@@ -549,7 +708,14 @@ export function CustomerAuthPage() {
 
                         <div className="w-full relative z-10">
                             <button
-                                onClick={() => { if (email.includes("@")) go("otp"); }}
+                                onClick={async () => { 
+                                    if (email.includes("@")) {
+                                        // Since backend only supports phone for now, we simulate OTP for email
+                                        alert(`Demo Mode: An OTP has been sent to ${email} (Use 123456)`);
+                                        setOtp(["1", "2", "3", "4", "5", "6"]);
+                                        go("otp"); 
+                                    }
+                                }}
                                 disabled={!email.includes("@")}
                                 style={glassBtnStyle(email.includes("@"))}
                             >
@@ -697,6 +863,15 @@ export function CustomerAuthPage() {
                                                 ) as HTMLInputElement
                                             )?.focus();
                                     }}
+                                    onPaste={(e) => {
+                                        e.preventDefault();
+                                        const data = e.clipboardData.getData("text").trim();
+                                        if (/^\d{6}$/.test(data)) {
+                                            const newOtp = data.split("");
+                                            setOtp(newOtp);
+                                            (document.getElementById("otp-c-5") as HTMLInputElement)?.focus();
+                                        }
+                                    }}
                                     style={{
                                         width: 60,
                                         height: 74,
@@ -719,7 +894,30 @@ export function CustomerAuthPage() {
                         </div>
 
                         <div className="w-full mt-2">
-                            <button onClick={() => go("permissions")} style={glassBtnStyle(true)}>Verify & Continue →</button>
+                            <button onClick={async () => {
+                                try {
+                                    const otpString = otp.join("");
+                                    if (otpString.length === 6) {
+                                        const res = await verifyOTP(`+91${phone}`, otpString);
+                                        
+                                        // result from authService already handles localStorage for tokens/user
+                                        const backendUser = res.user || res.data?.user;
+                                        
+                                        if (backendUser && (backendUser.full_name || backendUser.name)) {
+                                            if (backendUser.role === 'driver') {
+                                                navigate("/driver-dashboard");
+                                            } else {
+                                                navigate("/book");
+                                            }
+                                        } else {
+                                            go("profile");
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error("Critical error during OTP verification", e);
+                                    alert("Verification failed. Please check your OTP and try again.");
+                                }
+                            }} style={glassBtnStyle(otp.join("").length === 6)}>Verify & Continue →</button>
                         </div>
                     </div>
 
@@ -732,6 +930,26 @@ export function CustomerAuthPage() {
                     >
                         Didn't receive the code?{" "}
                         <span
+                            onClick={async () => {
+                                if (authProvider === "phone" && phone.length === 10) {
+                                    try {
+                                        const response = await requestOTP(`+91${phone}`, userRole);
+                                        const otpValue = response?.otp;
+                                        if (otpValue) {
+                                            const otpArray = String(otpValue).split("").slice(0, 6);
+                                            while(otpArray.length < 6) otpArray.push("");
+                                            setOtp(otpArray);
+                                            alert("OTP Resent successfully!");
+                                        }
+                                    } catch(e) {
+                                        alert("OTP 123456 (Demo Mode)");
+                                        setOtp("123456".split(""));
+                                    }
+                                } else if (authProvider !== "phone" && email) {
+                                    alert("OTP 123456 (Demo Mode Email)");
+                                    setOtp("123456".split(""));
+                                }
+                            }}
                             style={{
                                 color: G,
                                 cursor: "pointer",
@@ -742,7 +960,7 @@ export function CustomerAuthPage() {
                             {authProvider === "phone" ? "Resend via SMS" : "Resend to Email"}
                         </span>{" "}
                         <span style={{ color: "rgba(255,255,255,0.2)", marginLeft: 8 }}>
-                            Available in 24s
+                            Available Now
                         </span>
                     </p>
                     <p style={{ textAlign: "center", marginTop: 24 }}>
@@ -758,6 +976,72 @@ export function CustomerAuthPage() {
                             {authProvider === "phone" ? "Try a different number" : "Try a different email"}
                         </span>
                     </p>
+                </div>
+            </div>
+        );
+
+    /* ══════════════════════════════════════
+         PROFILE SETUP 
+       ══════════════════════════════════════ */
+    if (screen === "profile")
+        return (
+            <div style={{ ...WRAP }}>
+                <div style={{ width: "100%", maxWidth: 500, zIndex: 1, animation: "sfi 0.8s ease" }}>
+                    <div style={{ textAlign: "center", marginBottom: 44 }}>
+                        <div style={{ width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px", background: "rgba(212,175,55,0.08)", border: `2px solid ${G}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36, boxShadow: "0 0 30px rgba(212,175,55,0.15)" }}>
+                            👤
+                        </div>
+                        <h1 style={{ fontFamily: "'Poppins', sans-serif", fontSize: 34, fontWeight: 900, marginBottom: 12 }}>Your Profile</h1>
+                        <p style={{ fontFamily: "'Inter', sans-serif", color: "rgba(255,255,255,0.45)", fontSize: 16 }}>Help drivers recognize you</p>
+                    </div>
+
+                    <div className="glass-card" style={{ borderRadius: 28, padding: "32px", border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.02)", marginBottom: 24 }}>
+                        <div style={{ marginBottom: 20 }}>
+                            <p style={{ color: G, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Full Name</p>
+                            <input
+                                type="text"
+                                value={passengerName}
+                                onChange={(e) => setPassengerName(e.target.value)}
+                                placeholder="E.g., Priya Sharma"
+                                style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "2px solid rgba(212,175,55,0.2)", borderRadius: 16, padding: "16px 20px", color: "white", fontSize: 16, outline: "none", transition: "border-color 0.3s ease" }}
+                            />
+                        </div>
+
+                        <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
+                            <div style={{ flex: 1 }}>
+                                <p style={{ color: G, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Age</p>
+                                <input
+                                    type="number"
+                                    value={passengerAge}
+                                    onChange={(e) => setPassengerAge(e.target.value)}
+                                    placeholder="E.g., 25"
+                                    min="13" max="100"
+                                    style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "2px solid rgba(212,175,55,0.2)", borderRadius: 16, padding: "16px 20px", color: "white", fontSize: 16, outline: "none", transition: "border-color 0.3s ease" }}
+                                />
+                            </div>
+                            <div style={{ flex: 1.5 }}>
+                                <p style={{ color: G, fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, marginBottom: 10 }}>Gender</p>
+                                <select
+                                    value={passengerGender}
+                                    onChange={(e) => setPassengerGender(e.target.value)}
+                                    style={{ width: "100%", background: "rgba(0,0,0,0.3)", border: "2px solid rgba(212,175,55,0.2)", borderRadius: 16, padding: "16px 20px", color: "white", fontSize: 16, outline: "none", transition: "border-color 0.3s ease", appearance: "none" }}
+                                >
+                                    <option value="" disabled style={{ color: 'rgba(255,255,255,0.5)' }}>Select...</option>
+                                    <option value="male" style={{ background: DARK, color: 'white' }}>Male</option>
+                                    <option value="female" style={{ background: DARK, color: 'white' }}>Female</option>
+                                    <option value="other" style={{ background: DARK, color: 'white' }}>Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={() => go("permissions")}
+                            disabled={!passengerName || !passengerAge || !passengerGender}
+                            style={glassBtnStyle(!!passengerName && !!passengerAge && !!passengerGender)}
+                        >
+                            Continue →
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -985,9 +1269,45 @@ export function CustomerAuthPage() {
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <button onClick={() => navigate("/book")} style={glassBtnStyle(true)}>Enable & Start Journey</button>
+                    <button onClick={async () => {
+                        const newPassenger = { 
+                            phone_number: `+91${phone}`, 
+                            phone: phone, 
+                            full_name: passengerName,
+                            age: passengerAge,
+                            gender: passengerGender,
+                            registered_at: new Date().toLocaleString() 
+                        };
+                        const updated = [...passengers.filter((p:any) => p.phone_number !== newPassenger.phone_number), newPassenger];
+                        localStorage.setItem('saaradhigo_passengers', JSON.stringify(updated));
+                        localStorage.setItem('saaradhigo_current_user', JSON.stringify(newPassenger));
+                        
+                        try {
+                            await updateUserInfo({ full_name: passengerName, gender: passengerGender });
+                        } catch(e) {}
+
+                        navigate("/book");
+                    }} style={glassBtnStyle(true)}>Enable & Start Journey</button>
                     <button
-                        onClick={() => navigate("/book")}
+                        onClick={async () => {
+                            const newPassenger = { 
+                                phone_number: `+91${phone}`, 
+                                phone: phone, 
+                                full_name: passengerName,
+                                age: passengerAge,
+                                gender: passengerGender,
+                                registered_at: new Date().toLocaleString() 
+                            };
+                            const updated = [...passengers.filter((p:any) => p.phone_number !== newPassenger.phone_number), newPassenger];
+                            localStorage.setItem('saaradhigo_passengers', JSON.stringify(updated));
+                            localStorage.setItem('saaradhigo_current_user', JSON.stringify(newPassenger));
+                            
+                            try {
+                                await updateUserInfo({ full_name: passengerName, gender: passengerGender });
+                            } catch(e) {}
+
+                            navigate("/book");
+                        }}
                         style={{
                             width: "100%",
                             padding: "16px",

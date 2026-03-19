@@ -9,7 +9,7 @@ import {
   ArrowUpRight, ArrowDownLeft, MoreVertical
 } from 'lucide-react';
 import { MapView } from '../MapView';
-import logoImage from 'figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png';
+import logoImage from '@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png';
 
 const G = '#D4AF37';
 const DARK = '#0F1C2E';
@@ -23,6 +23,23 @@ type Screen =
   | 'confirm-ride' | 'driver-assigned' | 'live-tracking'
   | 'payment' | 'rating' | 'ride-history' | 'wallet'
   | 'profile' | 'rewards' | 'refer-earn';
+
+const getMatchedDriver = () => {
+  try {
+    const approved = JSON.parse(localStorage.getItem("saaradhigo_approved_drivers") || "[]");
+    if (approved && approved.length > 0) {
+      const latest = approved[approved.length - 1];
+      return {
+        name: latest.name || "Pavan",
+        vehicle: `${latest.vehicle_model || 'Swift Dzire'} · ${latest.plate || 'KA 05 MC 4892'}`,
+        phone: latest.phone_number || "+91 98765 43210"
+      };
+    }
+  } catch (e) {
+    console.error("Error reading approved drivers", e);
+  }
+  return { name: "Pavan", vehicle: "Swift Dzire · KA 05 MC 4892", phone: "+91 98765 43210" };
+};
 
 const BOTTOM_NAV_SCREENS: Screen[] = ['home', 'ride-history', 'wallet', 'profile', 'rewards'];
 
@@ -676,6 +693,7 @@ function ConfirmRideScreen({ navigate }: { navigate: (s: Screen) => void }) {
 
 /* ─────────── DRIVER ASSIGNED ─────────── */
 function DriverAssignedScreen({ navigate }: { navigate: (s: Screen) => void }) {
+  const driver = getMatchedDriver();
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: DARK }}>
       {/* Mini map */}
@@ -711,13 +729,13 @@ function DriverAssignedScreen({ navigate }: { navigate: (s: Screen) => void }) {
               </div>
             </div>
             <div className="flex-1">
-              <p className="text-base font-bold text-white">Ramesh Kumar</p>
+              <p className="text-base font-bold text-white">{driver.name}</p>
               <div className="flex items-center gap-1 mt-0.5">
                 <Star size={12} fill={G} color={G} />
                 <span className="text-sm font-medium" style={{ color: G }}>4.8</span>
                 <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>· 2,340 rides</span>
               </div>
-              <p className="text-xs mt-1 font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>🚗 Swift Dzire · <span style={{ color: G }}>KA 05 MC 4892</span></p>
+              <p className="text-xs mt-1 font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>{driver.vehicle}</p>
             </div>
           </div>
 
@@ -760,6 +778,7 @@ function DriverAssignedScreen({ navigate }: { navigate: (s: Screen) => void }) {
 
 /* ─────────── LIVE TRACKING ─────────── */
 function LiveTrackingScreen({ navigate }: { navigate: (s: Screen) => void }) {
+  const driver = getMatchedDriver();
   return (
     <div className="absolute inset-0">
       <MapView showRoute showDrivers height="100%" />
@@ -797,7 +816,7 @@ function LiveTrackingScreen({ navigate }: { navigate: (s: Screen) => void }) {
               <img src="https://images.unsplash.com/photo-1604343670513-af01df1260a1?w=100&h=100&fit=crop" className="w-full h-full object-cover" alt="Driver" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-white">Ramesh Kumar</p>
+              <p className="text-sm font-bold text-white">{driver.name}</p>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>KA 05 MC 4892 · Swift Dzire</p>
             </div>
             <div className="flex gap-2">
@@ -891,6 +910,7 @@ function PaymentScreen({ navigate }: { navigate: (s: Screen) => void }) {
 
 /* ─────────── RATING ─────────── */
 function RatingScreen({ navigate }: { navigate: (s: Screen) => void }) {
+  const driver = getMatchedDriver();
   const [stars, setStars] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -903,7 +923,7 @@ function RatingScreen({ navigate }: { navigate: (s: Screen) => void }) {
       </div>
       <div className="flex-1 overflow-y-auto px-6">
         <h2 className="text-xl font-bold text-white text-center mb-1">How was your trip?</h2>
-        <p className="text-sm text-center mb-6" style={{ color: 'rgba(255,255,255,0.5)' }}>With Ramesh Kumar</p>
+        <p className="text-sm text-center mb-6" style={{ color: 'rgba(255,255,255,0.5)' }}>With {driver.name}</p>
 
         {/* Stars */}
         <div className="flex justify-center gap-3 mb-6">

@@ -6,7 +6,7 @@ import ShinyText from "../components/ShinyText";
 import { Globe } from "../../components/ui/interactive-globe";
 import { ParticleCanvas } from "../components/ParticleCanvas";
 import { Card3D } from "../components/Card3D";
-import logoImage from "figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import logoImage from "../../assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
 
 /* ─── Brand Tokens ─── */
 const G = "#D4AF37";
@@ -205,30 +205,6 @@ export function ShowcasePage() {
       <p><strong style="color:#D4AF37">Team:</strong> 200+ passionate professionals across engineering, operations, safety, and design.</p><br/>
       <p>We offer Cars, Autos, Bikes, and Premium vehicles. Our AI-powered matching algorithm connects riders with the nearest verified driver in under 30 seconds.</p>`
     },
-    careers: {
-      title: "Career at SaaradhiGO",
-      body: `<p>Join a team building the future of mobility in India. We're hiring across engineering, product, design, operations, and driver relations.</p><br/>
-      <p><strong style="color:#D4AF37">Open Roles:</strong></p>
-      <ul style="list-style:none; padding:0; margin-top:8px; display:flex; flex-direction:column; gap:10px">
-        <li>🛠 Senior Backend Engineer (Node.js / Go)</li>
-        <li>🎨 Product Designer (Mobile-first)</li>
-        <li>📊 Growth & Analytics Lead</li>
-        <li>🚗 City Operations Manager — Bengaluru, Hyderabad, Chennai</li>
-        <li>🤝 Driver Partnership Executive</li>
-      </ul><br/>
-      <p><strong style="color:#D4AF37">Perks:</strong> Flexible remote, ESOPs, health insurance, unlimited rides credit, learning budget.</p><br/>
-      <p>📧 Send your CV to <strong style="color:#D4AF37">careers@saaradhigo.in</strong></p>`
-    },
-    press: {
-      title: "Press Kit",
-      body: `<p>For media inquiries, interviews, or coverage of SaaradhiGO, reach out to our communications team.</p><br/>
-      <p><strong style="color:#D4AF37">Press Contact:</strong> press@saaradhigo.in</p>
-      <p><strong style="color:#D4AF37">Phone:</strong> +91 98765 43211</p><br/>
-      <p><strong style="color:#D4AF37">Brand Assets:</strong></p>
-      <p style="margin-top:8px">Our logo, colour palette, and brand guidelines are available upon request. Please do not alter our branding without written permission.</p><br/>
-      <p><strong style="color:#D4AF37">Primary Colour:</strong> Gold (#D4AF37) · <strong style="color:#60A5FA">Secondary:</strong> Navy (#050D1A)</p>
-      <p><strong style="color:#D4AF37">Recent Coverage:</strong> The Hindu · TechCrunch India · Inc42 · YourStory</p>`
-    },
     blog: {
       title: "SaaradhiGO Blog",
       body: `<p>Stay up-to-date with the latest news, features, and stories from SaaradhiGO.</p><br/>
@@ -305,25 +281,65 @@ export function ShowcasePage() {
     },
     help: {
       title: "Help Center",
-      body: `<p>Welcome to the SaaradhiGO Help Center. Find answers to the most common questions.</p><br/>
+      body: `<p>Welcome to the SaaradhiGO Help Center. Find answers to the most common questions about bookings, payments, and safety.</p><br/>
       <p><strong style="color:#D4AF37">🚗 Booking Issues</strong></p>
-      <p>If your ride was not confirmed within 5 minutes, it is automatically cancelled and no charge is applied.</p><br/>
+      <p>If your ride was not confirmed within 5 minutes, it is automatically cancelled and no charge is applied. You can try booking again with a different vehicle category.</p><br/>
       <p><strong style="color:#D4AF37">💳 Payment Issues</strong></p>
-      <p>Duplicate charges are reversed within 3–5 working days. Contact support with your ride ID for faster resolution.</p><br/>
-      <p><strong style="color:#D4AF37">📍 Wrong Drop Location</strong></p>
-      <p>If your driver took a wrong route, raise a fare dispute within 24 hours via the app under Ride History → Dispute Fare.</p><br/>
+      <p>Duplicate charges are reversed within 3–5 working days automatically. If you don't see the refund, contact support with your ride ID.</p><br/>
+      <p><strong style="color:#D4AF37">📍 Wrong Route</strong></p>
+      <p>If your driver took a significantly longer route, raise a fare dispute within 24 hours via the app under Ride History → Dispute Fare.</p><br/>
       <p><strong style="color:#D4AF37">🔑 Lost Items</strong></p>
-      <p>Use the "Lost Item" feature in your recent rides to contact the driver directly.</p><br/>
-      <p>📧 help@saaradhigo.in · ☎ +91 98765 43210 (9AM–9PM)</p>`
+      <p>Use the "Lost Item" feature in your recent rides to contact the driver directly via an anonymised call for up to 48 hours after the trip.</p><br/>
+      <p>📧 <strong style="color:#D4AF37">help@saaradhigo.in</strong> · ☎ <strong style="color:#D4AF37">+91 98765 43210</strong> (Available 9AM–9PM daily)</p>`
+    },
+    safety: {
+      title: "Safety at SaaradhiGO",
+      body: `<p>Safety is our #1 priority. We've built multiple features to ensure you're protected throughout your journey.</p><br/>
+      <p><strong style="color:#D4AF37">🛡️ 24/7 Safety Support</strong> — A dedicated team monitoring rides and responding to SOS alerts in real-time.</p><br/>
+      <p><strong style="color:#D4AF37">📍 Live Trip Sharing</strong> — Share your ride status with friends and family so they know exactly where you are.</p><br/>
+      <p><strong style="color:#D4AF37">👮 Verified Drivers</strong> — Every driver-partner undergoes a rigorous background check and police verification before onboarding.</p><br/>
+      <p><strong style="color:#D4AF37">🆘 SOS Button</strong> — Instant connection to local emergency services and our safety response team.</p><br/>
+      <p><strong style="color:#D4AF37">😷 Hygiene Standards</strong> — Hand sanitizers and mandatory mask-wearing for all premium categories.</p>`
+    },
+    careers: {
+      title: "Careers",
+      body: `<p>Join the team that's building the future of urban mobility in India.</p><br/>
+      <p><strong style="color:#D4AF37">Life at SaaradhiGO:</strong> We value innovation, customer-centricity, and speed. We're a remote-first company with hubs in Bengaluru and Hyderabad.</p><br/>
+      <p><strong style="color:#D4AF37">Open Positions:</strong></p>
+      <ul style="margin-top:8px; display:flex; flex-direction:column; gap:8px">
+        <li>Backend Engineer (Node/Go/PostgreSQL)</li>
+        <li>Product Manager (Growth)</li>
+        <li>City Operations Lead (Chennai)</li>
+        <li>UI/UX Designer (Mobile)</li>
+      </ul><br/>
+      <p>Email your CV to <strong style="color:#D4AF37">careers@saaradhigo.in</strong> to apply.</p>`
+    },
+    press: {
+      title: "Press & Media",
+      body: `<p>For media inquiries, interviews, and brand assets.</p><br/>
+      <p><strong style="color:#D4AF37">Media Contact:</strong> press@saaradhigo.in</p><br/>
+      <p><strong style="color:#D4AF37">SaaradhiGO in the News:</strong></p>
+      <ul style="margin-top:8px; display:flex; flex-direction:column; gap:8px">
+        <li>"SaaradhiGO hits 1 million rides milestone" — <strong>Tech Today</strong></li>
+        <li>"The startup redefining premium cabs in India" — <strong>Financial Express</strong></li>
+        <li>"Safety first: The SaaradhiGO approach" — <strong>The Hindu</strong></li>
+      </ul><br/>
+      <p>Download our <strong style="color:#D4AF37">Media Kit</strong> for high-res logos and executive photos.</p>`
+    },
+    investors: {
+      title: "Investor Relations",
+      body: `<p>SaaradhiGO is backed by top-tier venture capital firms committed to sustainable mobility.</p><br/>
+      <p><strong style="color:#D4AF37">Our Growth:</strong> Over 200% YoY growth in active users and 150% growth in driver-partners across South India.</p><br/>
+      <p><strong style="color:#D4AF37">Current Round:</strong> Series B for expansion into 50+ new tier-2 cities.</p><br/>
+      <p>For investment inquiries, please contact our finance team at <strong style="color:#D4AF37">investors@saaradhigo.in</strong></p>`
     },
     "contact-us": {
       title: "Contact Us",
-      body: `<p>We're here to help. Reach out to SaaradhiGO through any of the channels below.</p><br/>
-      <p><strong style="color:#D4AF37">📧 General Enquiries</strong><br/>hello@saaradhigo.in</p><br/>
-      <p><strong style="color:#D4AF37">📧 Support</strong><br/>support@saaradhigo.in</p><br/>
-      <p><strong style="color:#D4AF37">📧 Press & Media</strong><br/>press@saaradhigo.in</p><br/>
-      <p><strong style="color:#D4AF37">📞 Phone Support</strong><br/>+91 98765 43210<br/><span style="font-size:12px;color:rgba(255,255,255,0.4)">Mon–Sat 9AM–9PM · Sun 10AM–6PM</span></p><br/>
-      <p><strong style="color:#D4AF37">📍 Head Office</strong><br/>SaaradhiGO Technologies Pvt. Ltd.<br/>Koramangala 5th Block, Bengaluru<br/>Karnataka — 560095, India</p>`
+      body: `<p>Need to get in touch? We're available across multiple channels.</p><br/>
+      <p><strong style="color:#D4AF37">📧 Support:</strong> support@saaradhigo.in (24/7)</p>
+      <p><strong style="color:#D4AF37">📧 Partnerships:</strong> partners@saaradhigo.in</p>
+      <p><strong style="color:#D4AF37">📞 Customer Helpline:</strong> +91 98765 43210 (9AM–9PM)</p>
+      <p><strong style="color:#D4AF37">📍 Head Office:</strong> Koramangala 5th Block, Bengaluru, KA - 560095</p>`
     },
     "driver-support": {
       title: "Driver Support",
@@ -384,6 +400,7 @@ export function ShowcasePage() {
     { label: "Drive", id: "drivers" },
     { label: "Business", id: "business" },
     { label: "About", id: "about" },
+    { label: "Admin", id: "admin", path: "/admin" },
   ];
 
   return (
@@ -431,11 +448,13 @@ export function ShowcasePage() {
           < nav style={{ display: "flex", alignItems: "center", gap: 8 }} className="desktop-nav" >
             {
               navLinks.map(l => (
-                <button key={l.id + l.label} onClick={() => scrollTo(l.id)} style={{
-                  background: "none", border: "none", color: "white",
-                  fontSize: 14, fontWeight: 600, cursor: "pointer", padding: "8px 12px",
-                  borderRadius: 999, transition: "background 0.2s"
-                }}
+                <button key={l.id + l.label} 
+                  onClick={() => 'path' in l ? navigate((l as any).path) : scrollTo(l.id)} 
+                  style={{
+                    background: "none", border: "none", color: "white",
+                    fontSize: 14, fontWeight: 600, cursor: "pointer", padding: "8px 12px",
+                    borderRadius: 999, transition: "background 0.2s"
+                  }}
                   onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                 >{l.label}</button>
@@ -1020,7 +1039,7 @@ export function ShowcasePage() {
               </div>
 
               <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                <GoldBtn onClick={() => navigate("/login")}>
+                <GoldBtn onClick={() => navigate("/driver")}>
                   Join as Driver Partner →
                 </GoldBtn>
                 <button onClick={() => navigate("/driver-dashboard")} style={{
@@ -1126,7 +1145,14 @@ export function ShowcasePage() {
               { name: "Sneha Das", city: "Kolkata", stars: 5, text: "The SaaradhiWallet rewards are incredible. I've earned enough points to get 3 free rides this month! Plus the app works seamlessly even on slow networks.", avatar: "👩‍🦱" },
               { name: "Vikram Singh", city: "Chennai", stars: 5, text: "Took a Prime ride to the airport and couldn't believe the quality — bottled water, phone charger, and a driver who knew every shortcut. 10/10.", avatar: "🧓" },
             ].map((t, i) => (
-              <TestimonialCard key={i} {...t} />
+              <TestimonialCard 
+                key={`testi-${i}`} 
+                name={t.name}
+                city={t.city}
+                stars={t.stars}
+                text={t.text}
+                avatar={t.avatar}
+              />
             ))}
           </div>
         </div>
@@ -1891,6 +1917,7 @@ export function ShowcasePage() {
 
 function StepCard({ step, icon, title, desc, color }: {
   step: string; icon: string; title: string; desc: string; color: string;
+  key?: React.Key;
 }) {
   return (
     <Card3D glowColor={color} shimmer style={{
@@ -1925,7 +1952,7 @@ function StepCard({ step, icon, title, desc, color }: {
   );
 }
 
-function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc: string; key?: React.Key }) {
   return (
     <Card3D glowColor="#D4AF37" shimmer style={{
       background: "linear-gradient(135deg, rgba(15,28,46,0.85), rgba(5,13,26,0.9))",
@@ -1949,7 +1976,7 @@ function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc:
   );
 }
 
-function SafetyCard({ icon, title, desc, color }: { icon: string; title: string; desc: string; color: string }) {
+function SafetyCard({ icon, title, desc, color }: { icon: string; title: string; desc: string; color: string; key?: React.Key }) {
   return (
     <Card3D glowColor={color} shimmer style={{
       background: "linear-gradient(135deg, rgba(15,28,46,0.85), rgba(5,13,26,0.9))",
@@ -1993,6 +2020,7 @@ function FooterCol({ title, links }: { title: string; links: string[] }) {
 function VehicleCard({ emoji, name, tagline, price, color, perks, onBook }: {
   emoji: string; name: string; tagline: string; price: string;
   color: string; perks: string[]; onBook: () => void;
+  key?: React.Key;
 }) {
   return (
     <Card3D glowColor={color} shimmer style={{
@@ -2056,6 +2084,7 @@ function VehicleCard({ emoji, name, tagline, price, color, perks, onBook }: {
 
 function TestimonialCard({ name, city, stars, text, avatar }: {
   name: string; city: string; stars: number; text: string; avatar: string;
+  key?: React.Key;
 }) {
   return (
     <Card3D glowColor="#D4AF37" shimmer={false} style={{

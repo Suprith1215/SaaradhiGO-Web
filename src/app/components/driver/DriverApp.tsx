@@ -8,7 +8,7 @@ import {
   FileText, Upload
 } from 'lucide-react';
 import { MapView } from '../MapView';
-import logoImage from 'figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png';
+import logoImage from '@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png';
 
 const G = '#D4AF37';
 const DARK = '#080F1A';
@@ -20,6 +20,23 @@ type DScreen =
   | 'splash' | 'login' | 'otp' | 'kyc' | 'vehicle-info' | 'verification-pending'
   | 'home' | 'ride-request' | 'navigate-pickup' | 'start-ride'
   | 'live-navigation' | 'end-ride' | 'earnings' | 'wallet' | 'ratings' | 'support';
+
+const getMatchedDriver = () => {
+  try {
+    const approved = JSON.parse(localStorage.getItem("saaradhigo_approved_drivers") || "[]");
+    if (approved && approved.length > 0) {
+      const latest = approved[approved.length - 1];
+      return {
+        name: latest.name || "Pavan",
+        vehicle: `${latest.vehicle_model || 'Swift Dzire'} · ${latest.plate || 'KA 05 MC 4892'}`,
+        phone: latest.phone_number || "+91 98765 43210"
+      };
+    }
+  } catch (e) {
+    console.error("Error reading approved drivers", e);
+  }
+  return { name: "Pavan", vehicle: "Swift Dzire · KA 05 MC 4892", phone: "+91 98765 43210" };
+};
 
 function GoldButton({ label, onClick, style }: { label: string; onClick?: () => void; style?: React.CSSProperties }) {
   return (
@@ -356,6 +373,7 @@ function VerificationPending({ navigate }: { navigate: (s: DScreen) => void }) {
 /* ─────────── DRIVER HOME ─────────── */
 function DriverHome({ navigate }: { navigate: (s: DScreen) => void }) {
   const [online, setOnline] = useState(false);
+  const driver = getMatchedDriver();
 
   return (
     <div className="absolute inset-0 flex flex-col">
@@ -369,7 +387,7 @@ function DriverHome({ navigate }: { navigate: (s: DScreen) => void }) {
             <img src={logoImage} alt="Logo" className="h-8 w-8 object-contain" />
             <div>
               <p className="text-xs" style={{ color: 'rgba(255,255,255,0.45)' }}>Driver Partner</p>
-              <p className="text-sm font-semibold text-white">Ramesh Kumar</p>
+              <p className="text-sm font-semibold text-white">{driver.name}</p>
             </div>
           </div>
           <div className="flex gap-2">
@@ -713,6 +731,7 @@ function LiveNavigation({ navigate }: { navigate: (s: DScreen) => void }) {
 
 /* ─────────── END RIDE ─────────── */
 function EndRide({ navigate }: { navigate: (s: DScreen) => void }) {
+  const driver = getMatchedDriver();
   return (
     <div className="absolute inset-0 flex flex-col" style={{ background: `linear-gradient(180deg, #020609, ${DARK})` }}>
       <div className="flex flex-col items-center px-6 pt-16 pb-4">
@@ -721,7 +740,7 @@ function EndRide({ navigate }: { navigate: (s: DScreen) => void }) {
           <CheckCircle size={40} color="#00C864" />
         </div>
         <h2 className="text-2xl font-bold text-white mb-1">Ride Completed!</h2>
-        <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>Great job, Ramesh!</p>
+        <p className="text-sm" style={{ color: 'rgba(255,255,255,0.45)' }}>Great job, {driver.name.split(' ')[0]}!</p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 space-y-4">

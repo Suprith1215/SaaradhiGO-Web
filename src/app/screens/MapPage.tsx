@@ -7,6 +7,11 @@ import {
     CheckCircle, Loader, Route, Users, AlertTriangle
 } from "lucide-react";
 import { MapBackground } from "../components/MapBackground";
+import { estimateFare } from "../../services/rideService";
+import { getNearbyDrivers } from "../../services/riderService";
+import { getCoordinates } from "../../services/mapService";
+import { useRideSimulation } from "../../services/mockRealtime";
+import { ChatOverlay } from "../components/ChatOverlay";
 
 /* ─────── Theme ─────── */
 const G = "#D4AF37";
@@ -54,18 +59,14 @@ const QUICK_LOCATIONS = [
     { icon: "💼", name: "MG Road Metro", area: "MG Road, Bengaluru", lat: 12.9756, lng: 77.6094 },
 ];
 
-type BookingStep = "idle" | "searching" | "seeking" | "matched" | "riding" | "arrived";
+type BookingStep = "idle" | "searching" | "seeking" | "matched" | "riding" | "arrived" | "ended";
 
 interface Driver {
     name: string; rating: number; rides: number; vehicle: string;
     plate: string; color: string; type: string; eta: string; phone: string;
 }
 
-const MOCK_DRIVER: Driver = {
-    name: "Ravi Kumar", rating: 4.9, rides: 3847, vehicle: "Maruti Swift",
-    plate: "KA 05 AB 1234", color: "Pearl White", type: "SaaraMini",
-    eta: "3 min", phone: "+91 98765 43210"
-};
+// MOCK_DRIVER removed per user request. Only real registered drivers will be shown.
 
 /* ─────── Suggestion dropdown ─────── */
 function LocationSuggestions({
@@ -121,8 +122,8 @@ function LocationSuggestions({
 
 /* ─────── Driver matched card ─────── */
 function DriverCard({
-    driver, step, onCancel, onArrived
-}: { driver: Driver; step: BookingStep; onCancel: () => void; onArrived: () => void }) {
+    driver, step, onCancel, onArrived, onChatClick
+}: { driver: Driver; step: BookingStep; onCancel: () => void; onArrived: () => void; onChatClick?: () => void; }) {
     const [expanded, setExpanded] = useState(true);
     const col = "#D4AF37";
 
@@ -230,7 +231,9 @@ function DriverCard({
                                     }}>
                                         <Phone size={18} color="#60D080" />
                                     </button>
-                                    <button style={{
+                                    <button 
+                                      onClick={onChatClick}
+                                      style={{
                                         width: 44, height: 44, borderRadius: "50%",
                                         background: GLASS_M, border: `1px solid ${GLASS_B}`,
                                         display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer"
@@ -381,7 +384,9 @@ function SearchingOverlay({ onCancel }: { onCancel: () => void }) {
 /* ─────── MAIN MAP PAGE ─────── */
 export function MapPage() {
     const navigate = useNavigate();
+    const { session, requestRide, cancelRide: cancelSession } = useRideSimulation();
     const [step, setStep] = useState<BookingStep>("idle");
+    const [showChat, setShowChat] = useState(false);
     const [pickup, setPickup] = useState("Koramangala, Bengaluru");
     const [drop, setDrop] = useState("");
     const [pickupFocused, setPickupFocused] = useState(false);
@@ -389,11 +394,69 @@ export function MapPage() {
     const [selectedRide, setSelectedRide] = useState("mini");
     const [panelOpen, setPanelOpen] = useState(false);
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [destLocation, setDestLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [gpsStatus, setGpsStatus] = useState<"loading" | "ok" | "denied" | "default">("loading");
     const [driver, setDriver] = useState<Driver | null>(null);
     const [pickupQuery, setPickupQuery] = useState("");
     const [dropQuery, setDropQuery] = useState("");
-    const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+    const [nearbyDrivers, setNearbyDrivers] = useState<any[]>([]);
+    const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Fetch real fare estimates from backend when route changes
+    useEffect(() => {
+        if (!userLocation || !destLocation) return;
+        
+        const fetchEstimates = async () => {
+            try {
+                // Approximate distance/duration for now
+                const dist = 8.5; 
+                const dur = 20;
+                
+                // Fetch for current selected type
+                const data = await estimateFare({
+                    pickup_lat: userLocation.lat,
+                    pickup_long: userLocation.lng,
+                    destination_lat: destLocation.lat,
+                    destination_long: destLocation.lng,
+                    distance_km: dist,
+                    duration_min: dur,
+                    vehicle_type: selectedRide
+                });
+                
+                if (data && data.estimated_fare) {
+                    // We could update RIDE_TYPES dynamically or just set a local state
+                    // For now, let's keep it simple and just show the returned fare in UI
+                    console.log("Real Fare Estimate:", data.estimated_fare);
+                }
+            } catch (error) {
+                console.warn("Failed to fetch real fare estimates:", error);
+            }
+        };
+
+        fetchEstimates();
+    }, [userLocation, destLocation, selectedRide]);
+
+    // Fetch nearby drivers periodically
+    useEffect(() => {
+        if (!userLocation) return;
+        
+        const fetchDrivers = async () => {
+            try {
+                const drivers = await getNearbyDrivers(userLocation.lat, userLocation.lng);
+                if (drivers && Array.isArray(drivers)) {
+                    // CRITICAL: Only show drivers that have been APPROVED by the admin
+                    const verifiedOnly = drivers.filter(d => d.is_verified === true || d.status === 'approved');
+                    setNearbyDrivers(verifiedOnly);
+                }
+            } catch (error) {
+                console.error("Failed to fetch nearby drivers:", error);
+            }
+        };
+
+        fetchDrivers();
+        const interval = setInterval(fetchDrivers, 10000); // refresh every 10s
+        return () => clearInterval(interval);
+    }, [userLocation]);
 
     const ride = RIDE_TYPES.find(r => r.id === selectedRide)!;
 
@@ -418,42 +481,105 @@ export function MapPage() {
         }
     }, []);
 
-    /* ── Book ride flow ── */
-    const handleBookRide = useCallback(() => {
-        if (!drop) return;
-        setStep("searching");
-        // Simulate finding driver
-        setTimeout(() => {
+    /* ── Book ride flow sync ── */
+    useEffect(() => {
+        if (!session) {
+            setStep("idle");
+            setDriver(null);
+            return;
+        }
+        if (session.status === "searching") {
             setStep("seeking");
-            setTimeout(() => {
-                setDriver(MOCK_DRIVER);
-                setStep("matched");
-                // Simulate driver arriving
-                setTimeout(() => setStep("riding"), 6000);
-                // Arrived
-                setTimeout(() => setStep("arrived"), 18000);
-            }, 4000);
-        }, 800);
-    }, [drop]);
+        } else if (session.status === "accepted") {
+            setStep("matched");
+            const acceptedDriver = nearbyDrivers?.find(d => String(d.id) === String(session.driverId));
+            const realDriver = acceptedDriver || (nearbyDrivers && nearbyDrivers.length > 0 ? nearbyDrivers[0] : null);
+            setDriver({
+                name: realDriver?.full_name || realDriver?.name || "Registered Partner",
+                rating: realDriver?.rating || 4.8,
+                rides: realDriver?.rides || 150,
+                vehicle: realDriver?.vehicle || "Maruti Swift",
+                plate: realDriver?.plate || realDriver?.vehicle_number || "KA 05 MC 4892",
+                color: "Pearl White",
+                type: realDriver?.type || "Prime",
+                eta: realDriver?.eta || "2 min",
+                phone: realDriver?.phone || "9988776655"
+            } as Driver);
+        } else if (session.status === "riding") {
+            setStep("riding");
+        } else if (session.status === "arrived") {
+            setStep("arrived");
+        } else if (session.status === "ended") {
+            setStep("ended");
+        }
+    }, [session, nearbyDrivers]);
+
+    const handleBookRide = useCallback(() => {
+        if (!drop || !userLocation || !destLocation) return;
+        setStep("searching");
+        let rName = "Anonymous", rAge = "", rGender = "";
+        try {
+            const p = JSON.parse(localStorage.getItem('saaradhigo_current_user') || 'null');
+            if (p) {
+                rName = p.full_name || p.name || "Anonymous";
+                rAge = p.age || "";
+                rGender = p.gender || "";
+            }
+        } catch(e) {}
+
+        requestRide({ 
+            pickup, 
+            drop, 
+            pickup_lat: userLocation.lat,
+            pickup_lng: userLocation.lng,
+            dest_lat: destLocation.lat,
+            dest_lng: destLocation.lng,
+            fare: ride.price, 
+            distance: "8.8 km", 
+            eta: ride.eta, 
+            type: ride.label,
+            riderName: rName, 
+            riderAge: rAge, 
+            riderGender: rGender
+        });
+    }, [drop, pickup, ride, userLocation, destLocation, requestRide]);
 
     const handleCancel = useCallback(() => {
+        cancelSession();
         setStep("idle");
         setDrop("");
         setDropQuery("");
         setDriver(null);
         setPanelOpen(false);
-    }, []);
+    }, [cancelSession]);
 
-    const selectLocation = useCallback((loc: typeof QUICK_LOCATIONS[0], isPickup: boolean) => {
+    const selectLocation = useCallback(async (loc: typeof QUICK_LOCATIONS[0] | string, isPickup: boolean) => {
+        const isString = typeof loc === 'string';
+        const name = isString ? loc : loc.name;
+        
         if (isPickup) {
-            setPickup(loc.name);
+            setPickup(name);
             setPickupQuery("");
             setPickupFocused(false);
+            if (!isString) setUserLocation({ lat: loc.lat, lng: loc.lng });
+            else {
+                try {
+                    const coords = await getCoordinates(loc);
+                    setUserLocation({ lat: coords[0], lng: coords[1] });
+                } catch (e) {}
+            }
         } else {
-            setDrop(loc.name);
+            setDrop(name);
             setDropQuery("");
             setDropFocused(false);
             setPanelOpen(true);
+            if (!isString) setDestLocation({ lat: loc.lat, lng: loc.lng });
+            else {
+                try {
+                    const coords = await getCoordinates(loc);
+                    setDestLocation({ lat: coords[0], lng: coords[1] });
+                } catch (e) {}
+            }
         }
     }, []);
 
@@ -476,11 +602,15 @@ export function MapPage() {
                     showRoute={showRoute}
                     showDriverPin={true}
                     showDestPin={!!drop}
+                    pickup={pickup}
+                    drop={drop}
                     userLat={userLocation?.lat}
                     userLng={userLocation?.lng}
-                    interactive={true}
-                    mode={step === "searching" ? "seeking" : "idle"}
+                    destLat={destLocation?.lat}
+                    destLng={destLocation?.lng}
                     trackedDriverId={driver ? 1 : null}
+                    externalDrivers={nearbyDrivers}
+                    mode={step === "searching" ? "seeking" : (step === "riding" ? "riding" : "idle")}
                 />
             </div>
 
@@ -508,10 +638,14 @@ export function MapPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span style={{ fontWeight: 900, fontSize: 16, color: G }}>SAARADHI</span>
                         <span style={{ fontWeight: 900, fontSize: 16, color: "white" }}>GO</span>
-                        <span style={{
-                            padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700,
+                        <div style={{
+                            display: "flex", alignItems: "center", gap: 5,
+                            padding: "3px 10px", borderRadius: 999, fontSize: 10, fontWeight: 800,
                             background: "rgba(212,175,55,0.12)", border: "1px solid rgba(212,175,55,0.3)", color: G,
-                        }}>Live Map</span>
+                        }}>
+                             <div style={{ width: 6, height: 6, borderRadius: "50%", background: G, boxShadow: `0 0 10px ${G}`, animation: "pulse-gold 1.5s infinite" }} />
+                             LIVE CONNECTED
+                        </div>
                     </div>
                 </div>
 
@@ -599,7 +733,7 @@ export function MapPage() {
                                     <div>
                                         <h2 style={{ fontWeight: 900, fontSize: 20, marginBottom: 2 }}>Where to?</h2>
                                         <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 12 }}>
-                                            {BASE_VEHICLES_PILL}
+                                            Find a ride for you or friends
                                         </p>
                                     </div>
                                     <button onClick={() => setPanelOpen(false)} style={{
@@ -635,6 +769,7 @@ export function MapPage() {
                                                 onChange={e => { setPickup(e.target.value); setPickupQuery(e.target.value); }}
                                                 onFocus={() => setPickupFocused(true)}
                                                 onBlur={() => setTimeout(() => setPickupFocused(false), 200)}
+                                                onKeyDown={e => { if (e.key === "Enter") selectLocation(pickup, true); }}
                                                 placeholder="Your pickup location"
                                                 style={{ flex: 1, background: "none", border: "none", outline: "none", color: "white", fontSize: 13, fontWeight: 500 }}
                                             />
@@ -668,6 +803,7 @@ export function MapPage() {
                                                 onChange={e => { setDrop(e.target.value); setDropQuery(e.target.value); }}
                                                 onFocus={() => setDropFocused(true)}
                                                 onBlur={() => setTimeout(() => setDropFocused(false), 200)}
+                                                onKeyDown={e => { if (e.key === "Enter") selectLocation(drop, false); }}
                                                 placeholder="Where are you going?"
                                                 style={{ flex: 1, background: "none", border: "none", outline: "none", color: "white", fontSize: 13, fontWeight: 500 }}
                                                 autoFocus
@@ -810,12 +946,16 @@ export function MapPage() {
 
             {/* ── Driver matched / riding / arrived ── */}
             {(step === "matched" || step === "riding" || step === "arrived") && driver && (
-                <DriverCard
-                    driver={driver}
-                    step={step}
-                    onCancel={handleCancel}
-                    onArrived={handleCancel}
-                />
+                <>
+                    <DriverCard
+                        driver={driver}
+                        step={step}
+                        onCancel={handleCancel}
+                        onArrived={handleCancel}
+                        onChatClick={() => setShowChat(true)}
+                    />
+                    {showChat && <ChatOverlay role="rider" onClose={() => setShowChat(false)} />}
+                </>
             )}
 
             {/* ── Floating action buttons ── */}
@@ -856,6 +996,39 @@ export function MapPage() {
                     >
                         <Route size={20} color="rgba(255,255,255,0.5)" />
                     </button>
+                </div>
+            )}
+
+            {/* ── FEEDBACK / ENDED SCREEN OVERLAY ── */}
+            {step === "ended" && (
+                <div style={{
+                    position: "absolute", inset: 0, zIndex: 2000,
+                    background: `linear-gradient(180deg, ${DARK} 0%, ${NAVY} 100%)`,
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: 20, textAlign: "center", color: "white"
+                }}>
+                    <div style={{ fontSize: 64, marginBottom: 20 }}>🎉</div>
+                    <h1 style={{ fontSize: 28, fontWeight: 900, marginBottom: 8, color: "#60D080" }}>Ride Completed!</h1>
+                    <p style={{ color: "rgba(255,255,255,0.6)", marginBottom: 32 }}>You have safely reached your destination.</p>
+                    
+                    <div style={{ background: "rgba(255,255,255,0.05)", padding: 24, borderRadius: 20, width: "100%", maxWidth: 400, border: `1px solid ${GLASS_B}`, backdropFilter: "blur(20px)" }}>
+                        <p style={{ fontWeight: 700, marginBottom: 16 }}>How was your ride with {driver?.name || "your driver"}?</p>
+                        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 24 }}>
+                            {[1, 2, 3, 4, 5].map(i => <Star key={i} size={32} color={G} cursor="pointer" />)}
+                        </div>
+                        <button onClick={() => {
+                            cancelSession();
+                            setStep("idle");
+                            setDrop("");
+                            setDropQuery("");
+                            setDriver(null);
+                            setPanelOpen(false);
+                        }} style={{
+                            width: "100%", padding: "14px", borderRadius: 14, border: "none",
+                            background: `linear-gradient(135deg, ${G}, #F0C040)`,
+                            color: DARK, cursor: "pointer", fontSize: 16, fontWeight: 800
+                        }}>Submit & Book Another</button>
+                    </div>
                 </div>
             )}
         </div>

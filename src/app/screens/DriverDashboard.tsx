@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
+import { socketService } from "../../services/socketService";
 import { LiquidButton, MetalButton } from "@/components/ui/liquid-glass-button";
 import {
   Navigation,
@@ -22,8 +23,12 @@ import {
   Zap,
   AlertCircle,
   Home,
+  Car,
 } from "lucide-react";
-import logoImage from "figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import logoImage from "@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import { useRideSimulation } from "../../services/mockRealtime";
+import { ChatOverlay } from "../components/ChatOverlay";
+import { MapBackground } from "../components/MapBackground";
 
 const G = "#D4AF37";
 const DARK = "#050D1A";
@@ -31,7 +36,7 @@ const NAVY = "#0F1C2E";
 const GLASS = "rgba(255,255,255,0.04)";
 const GB = "rgba(255,255,255,0.09)";
 
-type DTab = "home" | "earnings" | "wallet" | "ratings" | "support";
+type DTab = "home" | "earnings" | "wallet" | "ratings" | "vehicles" | "support";
 
 interface GCardProps extends React.HTMLAttributes<HTMLDivElement> {
   style?: React.CSSProperties;
@@ -78,20 +83,93 @@ function Badge({
   );
 }
 
+import { getProfile } from "../../services/authService";
+import { getEarningsSummary } from "../../services/driverService";
+
 export function DriverDashboard() {
   const navigate = useNavigate();
+  const { session, acceptRide, setStatus, endRide, requestRide, cancelRide } = useRideSimulation();
   const [tab, setTab] = useState<DTab>("home");
   const [online, setOnline] = useState(false);
-  const [rideRequest, setRideRequest] = useState(false);
-  const [rideState, setRideState] = useState<
-    "idle" | "navigate" | "start" | "live" | "ended"
-  >("idle");
+  const [ignoredIds, setIgnoredIds] = useState<string[]>([]);
+  const [rideState, setRideState] = useState<"idle" | "navigate" | "start" | "live" | "ended">("idle");
+  const [optInput, setOptInput] = useState("");
+  const [showChat, setShowChat] = useState(false);
+  const [driverProfile, setDriverProfile] = useState<any>(null);
+  const [earnings, setEarnings] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const geoInterval = useRef<any>(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+        try {
+            const [prof, earn] = await Promise.all([getProfile(), getEarningsSummary()]);
+            setDriverProfile(prof);
+            setEarnings(earn);
+            setLoading(false);
+        } catch (e) {
+            console.error("Failed to load driver data", e);
+            // Fallback to local storage for demo
+            const localUser = JSON.parse(localStorage.getItem('saaradhigo_current_user') || 'null');
+            if (localUser) setDriverProfile(localUser);
+            setLoading(false);
+        }
+    };
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    // Geolocation and Socket handling
+    if (online) {
+      socketService.connectDriverLocation();
+      socketService.connectRideRequest((data) => {
+        // useRideSimulation already handles the storage/context, 
+        // but we might want local feedback here
+        console.log("Driver got request update:", data);
+      });
+
+      geoInterval.current = setInterval(() => {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((pos) => {
+            socketService.updateDriverLocation(pos.coords.latitude, pos.coords.longitude);
+          }, (err) => console.warn("Geo error:", err));
+        }
+      }, 5000); // Update every 5s
+    } else {
+      socketService.disconnectAll();
+      if (geoInterval.current) clearInterval(geoInterval.current);
+    }
+
+    return () => {
+      if (geoInterval.current) clearInterval(geoInterval.current);
+    };
+  }, [online]);
+
+  useEffect(() => {
+     if (!session || ignoredIds.includes(session.id)) {
+         setRideState((prev) => prev === "ended" ? "ended" : "idle");
+     } else if (session.status === "accepted") {
+         setRideState("navigate");
+     } else if (session.status === "arrived") {
+         setRideState("start");
+     } else if (session.status === "riding") {
+         setRideState("live");
+     } else if (session.status === "ended") {
+         setRideState("ended");
+     } else {
+         setRideState("idle");
+     }
+  }, [session, ignoredIds]);
+
+  const hasRequest = online && session?.status === "searching" && !ignoredIds.includes(session.id);
 
   const TABS: { id: DTab; icon: React.ReactNode; label: string }[] = [
     { id: "home", icon: <Home size={16} />, label: "Dashboard" },
     { id: "earnings", icon: <TrendingUp size={16} />, label: "Earnings" },
     { id: "wallet", icon: <Wallet size={16} />, label: "Wallet" },
     { id: "ratings", icon: <Star size={16} />, label: "Ratings" },
+    { id: "vehicles", icon: <Car size={16} />, label: "Vehicles" },
     { id: "support", icon: <HelpCircle size={16} />, label: "Support" },
   ];
 
@@ -244,14 +322,14 @@ export function DriverDashboard() {
               🧑‍💼
             </div>
             <span style={{ color: "white", fontSize: 13, fontWeight: 600 }}>
-              Ravi Shankar
+              {driverProfile?.full_name || driverProfile?.name || "Ravi Shankar"}
             </span>
           </div>
         </div>
       </nav>
 
       {/* RIDE REQUEST POPUP */}
-      {online && rideRequest && rideState === "idle" && (
+      {hasRequest && (
         <div
           style={{
             position: "fixed",
@@ -323,7 +401,9 @@ export function DriverDashboard() {
                 >
                   FARE
                 </p>
-                <p style={{ color: G, fontSize: 28, fontWeight: 900 }}>₹185</p>
+                <p style={{ color: G, fontSize: 28, fontWeight: 900 }}>
+                  {session?.fare || "₹185"}
+                </p>
               </div>
               <div style={{ flex: 1 }}>
                 <p
@@ -336,7 +416,7 @@ export function DriverDashboard() {
                   DISTANCE
                 </p>
                 <p style={{ color: "white", fontSize: 20, fontWeight: 700 }}>
-                  11.2 km
+                  {session?.distance || "11.2 km"}
                 </p>
               </div>
               <div style={{ flex: 1 }}>
@@ -350,7 +430,7 @@ export function DriverDashboard() {
                   PICKUP
                 </p>
                 <p style={{ color: "white", fontSize: 13, fontWeight: 600 }}>
-                  ~3 min
+                  {session?.eta || "~3 min"}
                 </p>
               </div>
             </div>
@@ -397,29 +477,31 @@ export function DriverDashboard() {
                       marginBottom: 16,
                     }}
                   >
-                    Koramangala, Bengaluru
+                    {session?.pickup || "Koramangala, Bengaluru"}
                   </p>
                   <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
-                    Brigade Road, MG Road
+                    {session?.drop || "Brigade Road, MG Road"}
                   </p>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <Badge color="#60D080" bg="rgba(96,208,96,0.1)">
-                  SaaraMini
+                  {session?.type || "SaaraMini"}
                 </Badge>
                 <Badge
                   color="rgba(255,255,255,0.5)"
                   bg="rgba(255,255,255,0.06)"
                 >
-                  Arjun K. • 4.9★
+                  {session?.riderName ? `${session.riderName}${session.riderAge ? ` • ${session.riderAge}y` : ''}${session.riderGender ? ` • ${session.riderGender.charAt(0).toUpperCase()}` : ''}` : "Rider"} • 4.9★
                 </Badge>
               </div>
             </GCard>
 
             <div style={{ display: "flex", gap: 12 }}>
               <button
-                onClick={() => setRideRequest(false)}
+                onClick={() => {
+                   if (session) cancelRide();
+                }}
                 style={{
                   flex: 1,
                   padding: "14px",
@@ -436,8 +518,8 @@ export function DriverDashboard() {
               </button>
               <button
                 onClick={() => {
-                  setRideRequest(false);
-                  setRideState("navigate");
+                  socketService.sendTripAction('accept');
+                  acceptRide(driverProfile?.id || "drv_123");
                 }}
                 style={{
                   flex: 2,
@@ -487,10 +569,24 @@ export function DriverDashboard() {
                   fontSize: 32,
                 }}
               >
-                🧑‍💼
+                {driverProfile?.full_name?.[0] || driverProfile?.name?.[0] || "D"}
               </div>
-              <p style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
-                Ravi Shankar
+              <h3 style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
+                {driverProfile?.full_name || driverProfile?.name || "Driver"}
+              </h3>
+              <p
+                style={{
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 16,
+                }}
+              >
+                {driverProfile?.active_vehicle?.model 
+                  ? `${driverProfile.active_vehicle.brand} ${driverProfile.active_vehicle.model} (${driverProfile.active_vehicle.vehicle_type})`
+                  : driverProfile?.vehicle 
+                    ? driverProfile.vehicle 
+                    : "No Active Vehicle"}
               </p>
               <p
                 style={{
@@ -499,7 +595,7 @@ export function DriverDashboard() {
                   marginBottom: 8,
                 }}
               >
-                KA 05 MC 4892
+                {driverProfile?.active_vehicle?.vehicle_number || driverProfile?.vehicle_number || "-"}
               </p>
               <Badge color="#60D080" bg="rgba(96,208,96,0.1)">
                 4.8 ★ Rating
@@ -551,10 +647,10 @@ export function DriverDashboard() {
 
             <GCard style={{ padding: 16 }}>
               {[
-                ["Today", "₹1,240"],
-                ["This Week", "₹8,430"],
-                ["This Month", "₹32,150"],
-                ["Rides Today", "11"],
+                ["Today", `₹${earnings?.today?.amount || "0"}`],
+                ["This Week", `₹${earnings?.week?.amount || "0"}`],
+                ["This Month", `₹${earnings?.month?.amount || "0"}`],
+                ["Rides Today", `${earnings?.today?.count || "0"}`],
               ].map(([l, v]) => (
                 <div
                   key={l}
@@ -596,7 +692,7 @@ export function DriverDashboard() {
                   <h1
                     style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}
                   >
-                    Good afternoon, Ravi! 👋
+                    Good afternoon, {driverProfile?.full_name?.split(' ')[0] || "Driver"}! 👋
                   </h1>
                   <p style={{ color: "rgba(255,255,255,0.4)" }}>
                     {online
@@ -663,30 +759,30 @@ export function DriverDashboard() {
                   {
                     icon: "💰",
                     label: "Earnings Today",
-                    value: "₹1,240",
+                    value: `₹${earnings?.today?.amount || "0"}`,
                     color: G,
-                    sub: "11 trips",
+                    sub: `${earnings?.today?.count || "0"} trips`,
                   },
                   {
                     icon: "⭐",
                     label: "Rating",
-                    value: "4.8",
+                    value: driverProfile?.rating || "5.0",
                     color: G,
                     sub: "Last 30 days",
                   },
                   {
                     icon: "🚗",
                     label: "Trips Today",
-                    value: "11",
+                    value: `${earnings?.today?.count || "0"}`,
                     color: "#B9F2FF",
                     sub: "95% acceptance",
                   },
                   {
                     icon: "⏱️",
                     label: "Online Hours",
-                    value: "6.5h",
+                    value: `${earnings?.today?.online_hours || "0h"}`,
                     color: "#60D080",
-                    sub: "Since 8:30 AM",
+                    sub: "Active Session",
                   },
                 ].map((s) => (
                   <GCard
@@ -728,6 +824,45 @@ export function DriverDashboard() {
               {/* Active ride state */}
               {online && rideState !== "idle" && (
                 <div style={{ marginBottom: 24 }}>
+                  {/* Driver Mock Map View */}
+                  {rideState !== "ended" && (
+                    <div style={{
+                      position: "relative",
+                      height: 260,
+                      borderRadius: 20,
+                      overflow: "hidden",
+                      marginBottom: 16,
+                      border: "1px solid rgba(212,175,55,0.25)"
+                    }}>
+                      <MapBackground
+                        mode={rideState === "navigate" || rideState === "start" ? "seeking" : "idle"}
+                        showRoute={rideState === "navigate" || rideState === "live"}
+                        showDestPin={rideState === "live" || rideState === "navigate"}
+                        showDriverPin={true}
+                        interactive={false}
+                        trackedDriverId={driverProfile ? driverProfile.id : 1}
+                        externalDrivers={driverProfile ? [{ ...driverProfile, pos: [12.9368, 77.6280], id: driverProfile.id, rotation: 225 }] : []}
+                      />
+                      
+                      {/* Floating Map Info Overlay */}
+                      <div style={{
+                        position: "absolute",
+                        bottom: 12, left: 12, right: 12, zIndex: 600,
+                        background: "rgba(5, 13, 26, 0.85)", backdropFilter: "blur(12px)",
+                        padding: "10px 14px", borderRadius: 12,
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        display: "flex", alignItems: "center", gap: 10
+                      }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: rideState === "navigate" ? "#60D080" : "#D4AF37", boxShadow: `0 0 8px ${rideState === "navigate" ? "#60D080" : "#D4AF37"}` }} />
+                        <p style={{ color: "white", fontSize: 13, fontWeight: 700 }}>
+                          {rideState === "navigate" ? `Navigating to passenger pickup...` :
+                           rideState === "start" ? `Arrived! Waiting for passenger...` :
+                           `Driving passenger to destination...`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Navigate to Pickup */}
                   {rideState === "navigate" && (
                     <div
@@ -779,7 +914,7 @@ export function DriverDashboard() {
                               fontWeight: 700,
                             }}
                           >
-                            Heading to Koramangala
+                            Heading to {session?.pickup || "Pickup"}
                           </p>
                         </div>
                       </div>
@@ -800,7 +935,7 @@ export function DriverDashboard() {
                           <p
                             style={{ color: G, fontSize: 20, fontWeight: 800 }}
                           >
-                            3 min
+                            {session?.eta || "3 min"}
                           </p>
                         </GCard>
                         <GCard
@@ -817,7 +952,7 @@ export function DriverDashboard() {
                           <p
                             style={{ color: G, fontSize: 20, fontWeight: 800 }}
                           >
-                            ₹185
+                            {session?.fare || "₹185"}
                           </p>
                         </GCard>
                         <GCard
@@ -834,7 +969,7 @@ export function DriverDashboard() {
                           <p
                             style={{ color: G, fontSize: 20, fontWeight: 800 }}
                           >
-                            11.2km
+                            {session?.distance || "11.2 km"}
                           </p>
                         </GCard>
                       </div>
@@ -855,6 +990,7 @@ export function DriverDashboard() {
                           <Phone size={18} color={G} />
                         </button>
                         <button
+                          onClick={() => setShowChat(true)}
                           style={{
                             width: 48,
                             height: 48,
@@ -870,7 +1006,10 @@ export function DriverDashboard() {
                           <MessageSquare size={18} color={G} />
                         </button>
                         <button
-                          onClick={() => setRideState("start")}
+                          onClick={() => {
+                            socketService.sendTripAction('arrive');
+                            setStatus("arrived");
+                          }}
                           style={{
                             flex: 1,
                             padding: "14px",
@@ -936,7 +1075,7 @@ export function DriverDashboard() {
                         </div>
                         <div>
                           <p style={{ fontWeight: 700, fontSize: 16 }}>
-                            Arjun Kumar
+                            {session?.riderName ? `${session.riderName}${session.riderAge ? ` • ${session.riderAge}y` : ''}${session.riderGender ? ` • ${session.riderGender.charAt(0).toUpperCase()}` : ''}` : "Arjun Kumar"}
                           </p>
                           <div
                             style={{
@@ -987,7 +1126,10 @@ export function DriverDashboard() {
                         </div>
                       </div>
                       <button
-                        onClick={() => setRideState("live")}
+                        onClick={() => {
+                            socketService.sendTripAction('start');
+                            setStatus("riding");
+                        }}
                         style={{
                           width: "100%",
                           padding: "15px",
@@ -1061,7 +1203,7 @@ export function DriverDashboard() {
                           <p
                             style={{ color: G, fontSize: 24, fontWeight: 900 }}
                           >
-                            ₹185
+                            {session?.fare || "₹185"}
                           </p>
                         </GCard>
                         <GCard
@@ -1082,7 +1224,7 @@ export function DriverDashboard() {
                               fontWeight: 900,
                             }}
                           >
-                            6.2 km
+                            {session?.distance || "6.2 km"}
                           </p>
                         </GCard>
                         <GCard
@@ -1103,7 +1245,7 @@ export function DriverDashboard() {
                               fontWeight: 900,
                             }}
                           >
-                            12m
+                            {session?.eta || "12m"}
                           </p>
                         </GCard>
                       </div>
@@ -1124,7 +1266,10 @@ export function DriverDashboard() {
                           Cancel Trip
                         </button>
                         <button
-                          onClick={() => setRideState("ended")}
+                          onClick={() => {
+                              socketService.sendTripAction('complete');
+                              endRide();
+                          }}
                           style={{
                             flex: 2,
                             padding: "14px",
@@ -1214,7 +1359,7 @@ export function DriverDashboard() {
                         <button
                           onClick={() => {
                             setRideState("idle");
-                            setRideRequest(false);
+                            setStatus("idle");
                           }}
                           style={{
                             width: "100%",
@@ -1282,7 +1427,16 @@ export function DriverDashboard() {
                         </p>
                       </div>
                       <button
-                        onClick={() => setRideRequest(true)}
+                        onClick={() => {
+                          requestRide({
+                            pickup: "MG Road, Bengaluru",
+                            drop: "Indiranagar, Bengaluru",
+                            fare: "₹250",
+                            distance: "6.5 km",
+                            type: "SaaraMini",
+                            eta: "~5 min"
+                          });
+                        }}
                         style={{
                           padding: "10px 18px",
                           borderRadius: 12,
@@ -1326,32 +1480,7 @@ export function DriverDashboard() {
                     View earnings →
                   </button>
                 </div>
-                {[
-                  {
-                    from: "Indiranagar",
-                    to: "MG Road",
-                    fare: "₹149",
-                    time: "2:30 PM",
-                    km: "9.1 km",
-                    icon: "🚗",
-                  },
-                  {
-                    from: "HSR Layout",
-                    to: "Koramangala",
-                    fare: "₹98",
-                    time: "1:05 PM",
-                    km: "5.8 km",
-                    icon: "🚗",
-                  },
-                  {
-                    from: "Whitefield",
-                    to: "KR Puram",
-                    fare: "₹220",
-                    time: "11:20 AM",
-                    km: "13.5 km",
-                    icon: "🚗",
-                  },
-                ].map((t, i) => (
+                {(earnings?.recent_trips || []).map((t: any, i: number) => (
                   <div
                     key={i}
                     style={{
@@ -1359,7 +1488,7 @@ export function DriverDashboard() {
                       alignItems: "center",
                       gap: 14,
                       padding: "14px 20px",
-                      borderBottom: i < 2 ? `1px solid ${GB}` : "none",
+                      borderBottom: i < (earnings.recent_trips.length - 1) ? `1px solid ${GB}` : "none",
                     }}
                   >
                     <div
@@ -1374,7 +1503,7 @@ export function DriverDashboard() {
                         borderRadius: 12,
                       }}
                     >
-                      {t.icon}
+                      {t.icon || "🚗"}
                     </div>
                     <div style={{ flex: 1 }}>
                       <p
@@ -2073,6 +2202,85 @@ export function DriverDashboard() {
             </div>
           )}
 
+          {/* ═══ VEHICLES ═══ */}
+          {tab === "vehicles" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+                <div>
+                  <h1 style={{ fontSize: 26, fontWeight: 900, marginBottom: 4 }}>Manage Vehicles</h1>
+                  <p style={{ color: "rgba(255,255,255,0.4)" }}>You can add multiple vehicles and switch between them.</p>
+                </div>
+                <button
+                    onClick={() => {
+                        const vNum = prompt("Enter Vehicle Number (e.g. KA 05 MC 4892):");
+                        const vModel = prompt("Enter Model (e.g. Maruti Swift):");
+                        if (vNum && vModel) {
+                            // Backend: POST /driver/vehicles/add/
+                            const approved = JSON.parse(localStorage.getItem('saaradhigo_approved_drivers') || '[]');
+                            if (approved.length > 0) {
+                                const driver = approved[approved.length - 1];
+                                if (!driver.vehicles) driver.vehicles = [];
+                                driver.vehicles.push({
+                                    id: Date.now(),
+                                    vehicle_number: vNum,
+                                    vehicle_type: 'car',
+                                    brand: 'Unknown',
+                                    model: vModel,
+                                    color: 'White',
+                                    year: 2024,
+                                    capacity: 4
+                                });
+                                localStorage.setItem('saaradhigo_approved_drivers', JSON.stringify(approved));
+                                setDriverProfile({ ...driver });
+                                alert("Vehicle added successfully! Admin will review it shortly.");
+                            }
+                        }
+                    }}
+                    style={{
+                    padding: "12px 20px", borderRadius: 12, border: "none",
+                    background: `linear-gradient(135deg, ${G}, #F0C040)`, color: DARK,
+                    fontSize: 14, fontWeight: 800, cursor: "pointer"
+                }}>+ Add Vehicle</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                {[
+                  { id: 1, model: driverProfile?.vehicle || "Toyota Etios", plate: "KA 05 MC 4892", type: "Mini", active: true },
+                  ...(driverProfile?.vehicles || [])
+                ].map((v: any, idx) => (
+                  <GCard key={idx} style={{ padding: 20, border: v.active ? `1px solid ${G}` : `1px solid ${GB}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(212,175,55,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <Car size={24} color={G} />
+                      </div>
+                      {v.active ? (
+                        <Badge color={DARK} bg={G}>ACTIVE</Badge>
+                      ) : (
+                        <button 
+                             onClick={() => alert(`Vehicle ${v.vehicle_number || v.plate} selected as active.`)}
+                             style={{ background: "none", border: `1px solid ${GB}`, color: "rgba(255,255,255,0.4)", padding: "4px 10px", borderRadius: 8, fontSize: 11, cursor: "pointer" }}>
+                          SET ACTIVE
+                        </button>
+                      )}
+                    </div>
+                    <h3 style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>{v.model}</h3>
+                    <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, marginBottom: 12 }}>{v.vehicle_number || v.plate}</p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                       <Badge color="white" bg="rgba(255,255,255,0.06)">{v.type || v.vehicle_type || 'Mini'}</Badge>
+                       <Badge color="#60D080" bg="rgba(96,208,96,0.1)">Verified</Badge>
+                    </div>
+                  </GCard>
+                ))}
+              </div>
+              
+              {(!driverProfile?.vehicles || driverProfile.vehicles.length === 0) && (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "rgba(255,255,255,0.2)" }}>
+                      <p>No additional vehicles registered.</p>
+                  </div>
+              )}
+            </div>
+          )}
+
           {/* ═══ SUPPORT ═══ */}
           {tab === "support" && (
             <div>
@@ -2284,6 +2492,7 @@ export function DriverDashboard() {
       </div>
 
       <style>{`* { box-sizing: border-box; } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+      {showChat && <ChatOverlay role="driver" onClose={() => setShowChat(false)} />}
     </div>
   );
 }

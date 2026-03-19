@@ -15,6 +15,25 @@ function figmaAssetPlugin(): Plugin {
       }
     },
   }
+}function terminalLoggerPlugin(): Plugin {
+  return {
+    name: 'terminal-logger',
+    configureServer(server) {
+      server.middlewares.use('/__log_otp', (req, res) => {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          try {
+            const { otp } = JSON.parse(body);
+            console.log(`\n\x1b[32m==================================\x1b[0m`);
+            console.log(`\x1b[32m🚗 [SAARADHIGo] TEST OTP RECEIVED: \x1b[1m${otp}\x1b[0m`);
+            console.log(`\x1b[32m==================================\x1b[0m\n`);
+          } catch (e) {}
+          res.end('ok');
+        });
+      });
+    }
+  }
 }
 
 export default defineConfig({
@@ -24,6 +43,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     figmaAssetPlugin(),
+    terminalLoggerPlugin(),
   ],
   resolve: {
     alias: {
@@ -34,4 +54,9 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv', '**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.webp'],
+  server: {
+    hmr: {
+      overlay: false
+    }
+  }
 })

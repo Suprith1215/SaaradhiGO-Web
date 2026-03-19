@@ -1,5 +1,5 @@
 import React from "react";
-import logoImage from "figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
+import logoImage from "@/assets/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png";
 
 interface LogoProps {
   size?: number;

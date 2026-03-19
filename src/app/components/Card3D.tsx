@@ -7,6 +7,7 @@ interface Card3DProps {
     className?: string;
     intensity?: number;
     shimmer?: boolean;
+    key?: React.Key;
 }
 
 export function Card3D({

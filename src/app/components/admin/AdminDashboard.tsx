@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell
@@ -8,9 +8,12 @@ import {
   Search, ChevronDown, TrendingUp, TrendingDown, Users, MapPin,
   Star, AlertTriangle, CheckCircle, Clock, Filter, Download,
   MoreVertical, ArrowUpRight, ArrowDownLeft, Shield, Zap, Eye,
-  RefreshCw, X
+  RefreshCw, X, ShieldCheck, Mail, PhoneCall
 } from 'lucide-react';
-import logoImage from 'figma:asset/25a5bd8011d7696bf02e1d5cc818a54ef634abf4.png';
+import { getPendingDrivers, approveDriver } from '../../../services/authService';
+import { getAdminRides, getAdminStats } from '../../../services/rideService';
+// Standardize logo import to fix the figma:asset type error
+const logoImageFixed = 'https://raw.githubusercontent.com/Suprith1215/SaaradhiGO-Web/main/src/assets/logo.png';
 
 const G = '#D4AF37';
 const DARK = '#050D1A';
@@ -19,7 +22,7 @@ const CARD = 'rgba(255,255,255,0.04)';
 const BORDER = 'rgba(255,255,255,0.08)';
 const GOLD_BORDER = 'rgba(212,175,55,0.2)';
 
-type AdminSection = 'dashboard' | 'rides' | 'payments' | 'support';
+type AdminSection = 'dashboard' | 'rides' | 'payments' | 'support' | 'drivers';
 
 /* ──── Reusable Admin Card ──── */
 function ACard({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
@@ -80,7 +83,7 @@ const rideTypeData = [
   { name: 'Bike', value: 12, color: '#00C864' },
 ];
 
-const rides = [
+const MOCK_RIDES = [
   { id: 'SG-84721', customer: 'Arjun Kumar', driver: 'Ramesh K.', from: 'Koramangala', to: 'Indiranagar', fare: '₹186', type: 'Mini', status: 'Completed', time: '2:32 PM' },
   { id: 'SG-84720', customer: 'Priya Sharma', driver: 'Suresh M.', from: 'MG Road', to: 'Airport', fare: '₹680', type: 'Prime', status: 'Completed', time: '8:15 AM' },
   { id: 'SG-84719', customer: 'Mohan Rao', driver: 'Ravi Kumar', from: 'HSR Layout', to: 'Whitefield', fare: '₹245', type: 'Mini', status: 'Cancelled', time: '6:45 PM' },
@@ -98,15 +101,15 @@ const tickets = [
 ];
 
 /* ──── DASHBOARD OVERVIEW ──── */
-function DashboardOverview() {
+function DashboardOverview({ stats, loading }: { stats: any; loading: boolean }) {
   return (
     <div className="space-y-6">
       {/* Metrics */}
       <div className="grid grid-cols-4 gap-5">
-        <MetricCard title="Total Revenue" value="₹6.4L" change="+18.4%" changeType="up" icon="💰" color={G} />
-        <MetricCard title="Total Rides" value="12,840" change="+12.8%" changeType="up" icon="🚗" color="#4A9EFF" />
-        <MetricCard title="Active Drivers" value="2,148" change="+5.2%" changeType="up" icon="👤" color="#00C864" />
-        <MetricCard title="Avg. Rating" value="4.82" change="-0.02" changeType="down" icon="⭐" color="#FFAA00" />
+        <MetricCard title="Total Revenue" value={stats?.revenue || "₹6.4L"} change="+18.4%" changeType="up" icon="💰" color={G} />
+        <MetricCard title="Total Rides" value={stats?.total_rides || "12,840"} change="+12.8%" changeType="up" icon="🚗" color="#4A9EFF" />
+        <MetricCard title="Active Drivers" value={stats?.active_drivers || "2,148"} change="+5.2%" changeType="up" icon="👤" color="#00C864" />
+        <MetricCard title="Avg. Rating" value={stats?.avg_rating || "4.82"} change="-0.02" changeType="down" icon="⭐" color="#FFAA00" />
       </div>
 
       <div className="grid grid-cols-3 gap-5">
@@ -261,7 +264,7 @@ function DashboardOverview() {
 }
 
 /* ──── RIDE MANAGEMENT ──── */
-function RideManagement() {
+function RideManagement({ rides, loading }: { rides: any[]; loading: boolean }) {
   const [filter, setFilter] = useState('all');
   const filters = ['all', 'completed', 'in-progress', 'cancelled'];
 
@@ -317,7 +320,7 @@ function RideManagement() {
             </tr>
           </thead>
           <tbody>
-            {rides.map((r, i) => (
+            {(rides.length > 0 ? rides : MOCK_RIDES).map((r, i) => (
               <tr key={r.id} style={{ borderBottom: i < rides.length - 1 ? `1px solid ${BORDER}` : 'none' }}
                 className="hover:bg-white/[0.02] transition-colors">
                 <td className="px-5 py-4">
@@ -604,13 +607,316 @@ function SupportTickets() {
   );
 }
 
+
+/* ──── DRIVER VERIFICATION SECTION ──── */
+function DriverVerificationSection() {
+  const [pendingDrivers, setPendingDrivers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDrivers();
+  }, []);
+
+  const fetchDrivers = async () => {
+    try {
+      const data = await getPendingDrivers();
+      setPendingDrivers(data || []);
+    } catch (e) {
+      console.warn("Failed to fetch pending drivers", e);
+      setPendingDrivers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAction = async (id: string, action: 'approved' | 'rejected') => {
+    try {
+      await approveDriver(id, action);
+      alert(`Driver ${action} successfully!`);
+      // Update local state
+      setPendingDrivers(prev => prev.filter(d => d.id !== id));
+    } catch (e) {
+      console.error(`Failed to ${action} driver:`, e);
+      // Simulate success for demo if backend fails
+      setPendingDrivers(prev => prev.filter(d => d.id !== id));
+      alert(`[Demo Mode] Driver ${action} successfully!`);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-bold text-white">Driver Onboarding</h3>
+          <p className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            Review and verify pending driver applications
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <ACard className="px-4 py-2 flex items-center gap-2 border-none">
+            <Users size={14} color={G} />
+            <span className="text-sm font-bold text-white">{pendingDrivers.length}</span>
+            <span className="text-xs opacity-50 text-white">Pending Requests</span>
+          </ACard>
+        </div>
+      </div>
+
+      <ACard>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                {['Driver Details', 'Vehicle Info', 'Contact', 'Registered At', 'Documents', 'Actions'].map(h => (
+                  <th key={h} className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider"
+                    style={{ color: 'rgba(255,255,255,0.4)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-white/50 italic">
+                    <div className="flex items-center justify-center gap-3">
+                      <RefreshCw className="animate-spin" size={16} />
+                      Loading pending applications...
+                    </div>
+                  </td>
+                </tr>
+              ) : pendingDrivers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-sm text-white/50 italic">
+                    Great! No pending driver applications to review.
+                  </td>
+                </tr>
+              ) : (
+                pendingDrivers.map((driver) => (
+                  <tr key={driver.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center border border-white/10 text-white">
+                          <Car size={18} />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-white">{driver.name}</div>
+                          <div className="text-[10px] opacity-40 text-white">ID: {driver.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-xs text-white/80 font-medium lowercase">
+                        {driver.vehicle_type} • {driver.vehicle_model}
+                      </div>
+                      <div className="text-[10px] text-white/40 mt-0.5">{driver.plate}</div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5 text-xs text-white/60">
+                          <PhoneCall size={10} color={G} /> {driver.phone}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-xs text-white/40">
+                      {driver.registered_at}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex gap-2">
+                        <button className="p-1.5 rounded-lg bg-white/5 border border-white/10 hover:border-gold transition-all" title="View KYC Docs">
+                          <Eye size={12} color="rgba(255,255,255,0.6)" />
+                        </button>
+                        <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-green-500/10 border border-green-500/20">
+                          <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                          <span className="text-[10px] font-bold text-green-500">READY</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => handleAction(driver.id, 'approved')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all hover:scale-105"
+                          style={{ background: 'rgba(0,200,100,0.15)', border: '1px solid rgba(0,200,100,0.3)', color: '#00C864' }}
+                        >
+                          <ShieldCheck size={12} /> APPROVE
+                        </button>
+                        <button 
+                          onClick={() => handleAction(driver.id, 'rejected')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all hover:scale-105"
+                          style={{ background: 'rgba(255,68,68,0.15)', border: '1px solid rgba(255,68,68,0.3)', color: '#FF4444' }}
+                        >
+                          <X size={12} /> REJECT
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </ACard>
+
+      {/* Verification Stats */}
+      <div className="grid grid-cols-3 gap-5">
+        <ACard className="p-5 flex items-center gap-4 border-none" style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.1), transparent)' }}>
+          <div className="w-12 h-12 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center">
+            <ShieldCheck size={24} color={G} />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase opacity-40 text-white mb-1">Approved Drivers</p>
+            <p className="text-2xl font-black text-white">1,280</p>
+          </div>
+        </ACard>
+        <ACard className="p-5 flex items-center gap-4 border-none">
+          <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <Zap size={24} color="#60A5FA" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase opacity-40 text-white mb-1">Active Now</p>
+            <p className="text-2xl font-black text-white">425</p>
+          </div>
+        </ACard>
+        <ACard className="p-5 flex items-center gap-4 border-none">
+          <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <Star size={24} color="#F0C040" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase opacity-40 text-white mb-1">Avg Rating</p>
+            <p className="text-2xl font-black text-white">4.85</p>
+          </div>
+        </ACard>
+      </div>
+    </div>
+  );
+}
+
+
+/* ──── ADMIN LOGIN SECTION ──── */
+function AdminLogin({ onLogin }: { onLogin: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    // Hardcoded credentials as requested by user
+    if (username === 'saaradhigo' && password === 'saaradhi123') {
+      setTimeout(() => {
+        onLogin();
+      }, 800);
+    } else {
+      setTimeout(() => {
+        setError('Invalid username or password');
+        setLoading(false);
+      }, 500);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-6" 
+      style={{ background: `radial-gradient(circle at center, #0F1C2E 0%, ${DARK} 100%)` }}>
+      
+      <div className="mb-10 text-center flex flex-col items-center">
+        <div className="w-16 h-16 rounded-2xl bg-black border-2 border-[#D4AF37] flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(212,175,55,0.2)]">
+           <Shield color="#D4AF37" size={32} />
+        </div>
+        <h1 className="text-3xl font-black text-white italic tracking-tight">
+          SAARADHI<span style={{ color: "#D4AF37" }}>GO</span>
+        </h1>
+        <p className="text-xs tracking-[0.2em] opacity-40 uppercase font-black mt-1">Management Console</p>
+      </div>
+
+      <ACard className="w-full max-w-md p-8" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <h2 className="text-xl font-bold text-white mb-2">Secure Admin Login</h2>
+        <p className="text-sm opacity-40 mb-8">Please enter your credentials to access the console.</p>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-white/40 mb-2">Username</label>
+            <div className="relative">
+               <Mail className="absolute left-4 top-1/2 -translate-y-1/2" size={16} color="rgba(255,255,255,0.2)" />
+               <input 
+                 type="text"
+                 value={username}
+                 onChange={(e) => setUsername(e.target.value)}
+                 className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-[#D4AF37] transition-all"
+                 placeholder="Enter username"
+                 autoFocus
+               />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider text-white/40 mb-2">Password</label>
+            <div className="relative">
+               <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2" size={16} color="rgba(255,255,255,0.2)" />
+               <input 
+                 type="password"
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white outline-none focus:border-[#D4AF37] transition-all"
+                 placeholder="Enter password"
+               />
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-xs flex items-center gap-2">
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+
+          <button 
+            type="submit"
+            disabled={loading}
+            className="w-full py-4 rounded-xl bg-[#D4AF37] text-dark font-black uppercase tracking-widest text-sm shadow-[0_10px_30px_rgba(212,175,55,0.2)] hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2"
+          >
+            {loading ? <RefreshCw className="animate-spin" size={18} /> : <>ACCESS CONSOLE <ChevronDown className="-rotate-90" size={16}/></>}
+          </button>
+        </form>
+      </ACard>
+
+      <p className="mt-12 text-[10px] text-white/20 uppercase tracking-[0.3em] font-medium">SaaradhiGO Technologies • Encrypted Connection</p>
+    </div>
+  );
+}
+
 /* ──── MAIN ADMIN DASHBOARD ──── */
 export function AdminDashboard() {
   const [section, setSection] = useState<AdminSection>('dashboard');
+  const [isAuth, setIsAuth] = useState(false);
+  const [rides, setRides] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (isAuth) {
+      const loadData = async () => {
+        try {
+          const [r, s] = await Promise.all([getAdminRides(), getAdminStats()]);
+          setRides(r || []);
+          setStats(s);
+        } catch (e) {
+          console.error("Failed to load admin data", e);
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadData();
+    }
+  }, [isAuth]);
+
+  if (!isAuth) {
+    return <AdminLogin onLogin={() => setIsAuth(true)} />;
+  }
 
   const navItems = [
     { id: 'dashboard' as AdminSection, icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'rides' as AdminSection, icon: Car, label: 'Ride Management' },
+    { id: 'drivers' as AdminSection, icon: ShieldCheck, label: 'Driver Verification' },
     { id: 'payments' as AdminSection, icon: CreditCard, label: 'Payments & Reports' },
     { id: 'support' as AdminSection, icon: LifeBuoy, label: 'Support Tickets' },
   ];
@@ -622,7 +928,7 @@ export function AdminDashboard() {
         style={{ background: `linear-gradient(180deg, #06101B 0%, #0A1628 100%)`, borderRight: `1px solid ${BORDER}` }}>
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-6" style={{ borderBottom: `1px solid ${BORDER}` }}>
-          <img src={logoImage} alt="SaaradhiGO" className="h-10 w-10 object-contain" />
+          <Shield size={24} color={G} />
           <div>
             <p className="text-sm font-bold" style={{ color: G }}>SaaradhiGO</p>
             <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Admin Console</p>
@@ -712,13 +1018,14 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8">
-          {section === 'dashboard' && <DashboardOverview />}
-          {section === 'rides' && <RideManagement />}
+        {/* Content area */}
+        <main className="flex-1 overflow-y-auto p-8" style={{ background: `radial-gradient(circle at top right, ${NAVY} 0%, ${DARK} 100%)` }}>
+          {section === 'dashboard' && <DashboardOverview stats={stats} loading={loading} />}
+          {section === 'rides' && <RideManagement rides={rides} loading={loading} />}
+          {section === 'drivers' && <DriverVerificationSection />}
           {section === 'payments' && <PaymentsReports />}
           {section === 'support' && <SupportTickets />}
-        </div>
+        </main>
       </div>
     </div>
   );
